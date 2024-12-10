@@ -1,2 +1,9 @@
-tree_metadata = [f"Tree Depth {i}: {page.title}" for i in range(page.level + 1)]
-page.tree_info = tree_metadata  # Store the generated tree info
+# Build the tree_info list based on ancestors and current page
+            tree_metadata = []
+            
+            # Add ancestors first
+            for i, ancestor in enumerate(page.ancestors):
+                tree_metadata.append(f"Tree Depth {i}: {ancestor['title']}")
+            
+            # Add the current page
+            tree_metadata.append(f"Tree Depth {page.level}: {page.title}")
