@@ -1,49 +1,66 @@
-# Fetch Confluence page content
-def fetch_confluence_page():
-    api_url = f"{confluence_url}/rest/api/content/{page_id}?expand=body.storage"
-    response = requests.get(api_url, auth=HTTPBasicAuth(username, password))
-    
-    if response.status_code == 200:
-        data = response.json()
-        page_content = data.get("body", {}).get("storage", {}).get("value", "")
-        return page_content
-    else:
-        print(f"Failed to fetch Confluence page. Status code: {response.status_code}")
-        print(f"Response: {response.text}")
-        return None
+from atlassian import Confluence
+import camelot
+import pandas as pd
 
-# Fetch Jira data using JQL
-def fetch_jira_data(jql):
-    api_url = f"{jira_url}/rest/api/2/search"
-    params = {"jql": jql}
-    response = requests.get(api_url, auth=HTTPBasicAuth(username, password), params=params)
+# Confluence credentials
+username = "<YOUR_USERNAME>"
+password = "<YOUR_PASSWORD>"
+url = "<YOUR_CONFLUENCE_URL>"
 
-    if response.status_code == 200:
-        return response.json()
-    else:
-        print(f"Failed to fetch Jira data. Status code: {response.status_code}")
-        print(f"Response: {response.text}")
+# Page ID and output file
+page_id = "<YOUR_PAGE_ID>"
+pdf_file = "confluence_page.pdf"
+
+# Initialize Confluence API client
+confluence = Confluence(
+    url=url,
+    username=username,
+    password=password
+)
+
+# Fetch and save PDF
+def fetch_pdf():
+    try:
+        response = confluence.get_page_as_pdf(page_id)
+        with open(pdf_file, "wb") as file:
+            file.write(response)
+        print(f"PDF downloaded: {pdf_file}")
+    except Exception as e:
+        print(f"Error fetching PDF: {e}")
+
+# Extract tables using Camelot
+def extract_tables():
+    try:
+        tables = camelot.read_pdf(pdf_file, pages="all", flavor="stream")
+        print(f"Found {len(tables)} tables in the PDF.")
+
+        # Process each table
+        all_tables = []
+        for i, table in enumerate(tables):
+            df = table.df  # Table as DataFrame
+            table_string = df.to_string(index=False, header=False)  # Convert DataFrame to string
+            all_tables.append(f"Start Table {i + 1}\n{table_string}\nEnd Table {i + 1}")
+
+        # Combine all table strings
+        result = "\n\n".join(all_tables)
+        print(result)
+        return result
+    except Exception as e:
+        print(f"Error extracting tables: {e}")
         return None
 
 # Main function
 def main():
-    # Fetch and parse Confluence page content
-    content = fetch_confluence_page()
-    if content:
-        # Use BeautifulSoup to parse HTML and find Jira macros
-        soup = BeautifulSoup(content, "html.parser")
-        jira_macros = soup.find_all("ac:structured-macro", {"ac:name": "jira"})
-        
-        for i, macro in enumerate(jira_macros, start=1):
-            jql = macro.find("ac:parameter", {"ac:name": "jql"}).text
-            print(f"Jira Macro {i}: JQL Query: {jql}")
-            
-            # Fetch data from Jira
-            jira_data = fetch_jira_data(jql)
-            if jira_data:
-                print(f"Jira Data for Macro {i}: {jira_data}")
-            else:
-                print(f"No data retrieved for Jira Macro {i}.")
+    # Step 1: Fetch the PDF
+    fetch_pdf()
+
+    # Step 2: Extract tables
+    table_data = extract_tables()
+    if table_data:
+        # Save the table data to a text file if needed
+        with open("extracted_tables.txt", "w") as file:
+            file.write(table_data)
+        print("Extracted table data saved to 'extracted_tables.txt'.")
 
 if __name__ == "__main__":
     main()
