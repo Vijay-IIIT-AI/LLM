@@ -5,6 +5,7 @@ import tempfile
 import concurrent.futures
 from atlassian import Confluence
 from datetime import datetime
+import json
 
 # Setup Confluence connection (use your credentials here)
 confluence = Confluence(url='your_confluence_url', username='your_username', password='your_password')
@@ -31,14 +32,28 @@ def extract_tables(pdf_file: str):
         for i, table in enumerate(tables):
             df = table.df  # Convert table to DataFrame
             table_string = df.to_string(index=False, header=False)  # Convert DataFrame to string
-            all_tables.append(f"[START[TABLE] Table {i + 1}]\n{table_string}\n[END[TABLE]]")
+            all_tables.append(f"[START][TABLE]\n{table_string}\n[END][TABLE]")
 
-        # Combine all table strings into one result
-        result = "\n\n".join(all_tables)
-        return result
+        return all_tables
     except Exception as e:
         print(f"Error extracting tables: {e}")
-        return None
+        return []
+
+# Function to extract text content from the PDF
+def extract_text(pdf_file: str):
+    try:
+        # Extract text from the PDF using PyPDF2 or any other library
+        from PyPDF2 import PdfReader
+        reader = PdfReader(pdf_file)
+        text_content = ""
+        
+        for page in reader.pages:
+            text_content += page.extract_text()
+
+        return text_content
+    except Exception as e:
+        print(f"Error extracting text from PDF: {e}")
+        return ""
 
 # Function to process a single page ID
 def process_single_page(page_id: str, temp_dir: str):
@@ -52,10 +67,18 @@ def process_single_page(page_id: str, temp_dir: str):
 
         # Step 2: Extract tables from the PDF
         table_data = extract_tables(pdf_file)
-        page_content = table_data if table_data else "No tables found."
 
-        # Step 3: Add page content to the result dictionary
-        result_dict[page_id] = page_content
+        # Step 3: Extract text content from the PDF
+        text_content = extract_text(pdf_file)
+
+        # Combine text and table data while maintaining order
+        combined_content = text_content
+        if table_data:
+            # Add the tables after the relevant content
+            combined_content += "\n\n".join(table_data)
+
+        # Step 4: Add page content to the result dictionary
+        result_dict[page_id] = combined_content
 
     except Exception as e:
         print(f"Error processing page {page_id}: {e}")
@@ -104,6 +127,15 @@ def cleanup_temp_directory(temp_dir: str):
         shutil.rmtree(temp_dir)
         print(f"Temporary directory {temp_dir} cleaned up.")
 
+# Function to save the result dictionary as JSON
+def save_results_as_json(result_dict: dict, json_file: str):
+    try:
+        with open(json_file, "w") as json_file:
+            json.dump(result_dict, json_file, indent=4)
+        print(f"Results saved to {json_file}")
+    except Exception as e:
+        print(f"Error saving results to JSON: {e}")
+
 # Main function
 def main(page_ids: list):
     # Create a temporary directory to store PDFs
@@ -112,12 +144,9 @@ def main(page_ids: list):
     # Step 1: Process all pages (with or without batching)
     result_dict = process_pages_in_batches(page_ids, temp_dir)
 
-    # Step 2: Optionally, save results to a text file or return them
+    # Step 2: Save the results to a JSON file
     if result_dict:
-        with open("page_contents.txt", "w") as file:
-            for page_id, content in result_dict.items():
-                file.write(f"{page_id}: {content}\n\n")
-        print("Page contents saved to 'page_contents.txt'.")
+        save_results_as_json(result_dict, "page_contents.json")
 
     # Step 3: Cleanup the temporary directory
     cleanup_temp_directory(temp_dir)
