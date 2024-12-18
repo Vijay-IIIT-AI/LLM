@@ -20,33 +20,57 @@ def fetch_page_as_html(page_id):
         print(f"Failed to fetch page {page_id}: {response.status_code}, {response.text}")
         return None
 
-# Process the HTML to extract text and format tables
-def process_html(html_content):
+def process_html_preserving_structure(html_content):
     try:
         soup = BeautifulSoup(html_content, "html.parser")
 
-        # Extract all text, preserving table order
         result_text = []
-        
-        for element in soup.descendants:
-            if element.name == "table":  # Handle tables
+
+        def process_element(element, indent=0):
+            # Skip tags like style, script, etc.
+            if element.name in ["style", "script", "head", "meta", "link"]:
+                return
+
+            # Handle tables specifically
+            if element.name == "table":
                 table_text = []
                 rows = element.find_all("tr")
                 for row in rows:
                     cells = row.find_all(["th", "td"])
                     cell_text = [cell.get_text(strip=True) for cell in cells]
                     table_text.append("\t".join(cell_text))
-                formatted_table = f"[START][TABLE]\n{'\n'.join(table_text)}\n[END][TABLE]"
-                result_text.append(formatted_table)
-            elif element.name in ["p", "div", "span"]:  # Handle text elements
+                result_text.append(
+                    " " * indent + "[START][TABLE]\n" +
+                    "\n".join(table_text) +
+                    "\n" + " " * indent + "[END][TABLE]"
+                )
+                return
+
+            # Handle text elements
+            if element.name in ["p", "div", "span", "li", "h1", "h2", "h3", "h4", "h5", "h6"]:
                 text = element.get_text(strip=True)
                 if text:
-                    result_text.append(text)
+                    result_text.append(" " * indent + text)
 
-        return "\n\n".join(result_text)
+            # Recursively process child elements
+            for child in element.children:
+                if isinstance(child, str):  # Plain text nodes
+                    text = child.strip()
+                    if text:
+                        result_text.append(" " * indent + text)
+                else:  # Nested tags
+                    process_element(child, indent + 4)
+
+        # Start processing the body of the HTML
+        body = soup.body
+        if body:
+            process_element(body)
+
+        return "\n".join(result_text)
     except Exception as e:
         print(f"Error processing HTML: {e}")
         return None
+
 
 # Main function to handle multiple Page IDs
 def process_page_ids(page_ids):
