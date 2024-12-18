@@ -1,19 +1,8 @@
-def detect_language_and_count(text):
-    # Ensure the value is a string, if not, convert it to an empty string
-    if not isinstance(text, str):
-        text = ""
-    # Check for English words
-    english_word_count = len(re.findall(r'\b\w+\b', text))
-    # Check for Korean characters
-    korean_char_count = len(re.findall(r'[\uac00-\ud7a3]', text))
-    # Determine language type
-    if english_word_count > 0 and korean_char_count > 0:
-        language = "bilingual"
-    elif english_word_count > 0:
-        language = "english"
-    elif korean_char_count > 0:
-        language = "korean"
-    else:
-        language = "unknown"
-    # Return total word count and language
-    return english_word_count + korean_char_count, language
+# Step 3: Identify rows with fewer than 20 total words/characters
+rows_with_few_words = df[df["word_count"] < 20]
+
+# Step 4: Get the `page_id` of rows to remove
+page_ids_to_remove = rows_with_few_words["page_id"].tolist()
+
+# Step 5: Drop rows with fewer than 20 total words/characters
+df = df[df["word_count"] >= 20].drop(columns=["word_count"])  # Remove helper column if not needed
