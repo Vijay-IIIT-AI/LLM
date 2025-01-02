@@ -1,8 +1,36 @@
-# Step 3: Identify rows with fewer than 20 total words/characters
-rows_with_few_words = df[df["word_count"] < 20]
+import pandas as pd
 
-# Step 4: Get the `page_id` of rows to remove
-page_ids_to_remove = rows_with_few_words["page_id"].tolist()
+# Sample data for demonstration
+Re_scarpeddict = {
+    "page1": "Content from rescraped data for page 1",
+    "page2": "Content from rescraped data for page 2",
+    "page3": "Content from rescraped data for page 3"
+}
 
-# Step 5: Drop rows with fewer than 20 total words/characters
-df = df[df["word_count"] >= 20].drop(columns=["word_count"])  # Remove helper column if not needed
+markdowndata = {
+    "page1": "Content from markdown data for page 1",
+    "page2": "Content from markdown data for page 2",
+    "page3": "Content from markdown data for page 3"
+}
+
+# Create a sample DataFrame
+data = {
+    'Page_content': [None, None, None],
+    'page_id': ['page1', 'page2', 'page3'],
+    'bool': [False, True, False]
+}
+
+df = pd.DataFrame(data)
+
+# Function to map page content based on the bool value
+def map_page_content(row):
+    if row['bool']:
+        return Re_scarpeddict.get(row['page_id'], None)
+    else:
+        return markdowndata.get(row['page_id'], None)
+
+# Apply the function to the DataFrame
+df['Page_content'] = df.apply(map_page_content, axis=1)
+
+# Display the updated DataFrame
+print(df)
