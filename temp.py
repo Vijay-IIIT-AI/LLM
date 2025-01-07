@@ -1,36 +1,60 @@
-import pandas as pd
+import re
 
-# Sample data for demonstration
-Re_scarpeddict = {
-    "page1": "Content from rescraped data for page 1",
-    "page2": "Content from rescraped data for page 2",
-    "page3": "Content from rescraped data for page 3"
-}
+def convert_table_to_structured_text(table_text):
+    """
+    Convert a Markdown table to structured text.
 
-markdowndata = {
-    "page1": "Content from markdown data for page 1",
-    "page2": "Content from markdown data for page 2",
-    "page3": "Content from markdown data for page 3"
-}
+    Args:
+        table_text (str): The Markdown table as a string.
 
-# Create a sample DataFrame
-data = {
-    'Page_content': [None, None, None],
-    'page_id': ['page1', 'page2', 'page3'],
-    'bool': [False, True, False]
-}
+    Returns:
+        str: Structured text representing the table's content.
+    """
+    # Split the table into lines and process
+    lines = table_text.strip().split('\n')
+    headers = lines[0].strip('|').split('|')  # Extract headers
+    rows = [line.strip('|').split('|') for line in lines[2:]]  # Skip separator line
 
-df = pd.DataFrame(data)
+    # Clean whitespace and convert each row
+    structured_rows = []
+    for row in rows:
+        row_text = ', '.join([f"{headers[i].strip()}: {cell.strip()}" for i, cell in enumerate(row)])
+        structured_rows.append(f"- {row_text}")
 
-# Function to map page content based on the bool value
-def map_page_content(row):
-    if row['bool']:
-        return Re_scarpeddict.get(row['page_id'], None)
-    else:
-        return markdowndata.get(row['page_id'], None)
+    return '\n'.join(structured_rows)
 
-# Apply the function to the DataFrame
-df['Page_content'] = df.apply(map_page_content, axis=1)
+def enrich_markdown_table_with_structured_text(markdown_text):
+    """
+    Replace Markdown tables in a document with their structured text equivalent.
 
-# Display the updated DataFrame
-print(df)
+    Args:
+        markdown_text (str): The Markdown document containing tables.
+
+    Returns:
+        str: The Markdown document with tables converted to structured text.
+    """
+    enriched_markdowns = []
+    table_regex = r"(.*?)(\|[^\n]+\|(?:\n\|[^\n]+\|)+)"
+    matches = re.findall(table_regex, markdown_text, flags=re.DOTALL)
+
+    for match in matches:
+        surrounding_text = match[0].strip()
+        table_text = match[1].strip()
+
+        # Convert the table to structured text
+        structured_text = convert_table_to_structured_text(table_text)
+
+        # Reformat enriched table with structured text
+        enriched_table = f"{surrounding_text}\n\n{structured_text}\n"
+        enriched_markdowns.append(enriched_table)
+
+    return "\n".join(enriched_markdowns)
+
+# Example Markdown with tables
+markdown_text = """
+"""
+# """
+
+# Process the Markdown
+enriched_markdown = enrich_markdown_table_with_structured_text(markdown_text)
+print(enriched_markdown)
