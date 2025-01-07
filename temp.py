@@ -1,60 +1,81 @@
 import re
 
-def convert_table_to_structured_text(table_text):
+def process_multiple_tables_without_separator(page_text):
     """
-    Convert a Markdown table to structured text.
+    Process multiple Markdown tables without separator rows within a single page and convert them into structured text.
 
     Args:
-        table_text (str): The Markdown table as a string.
+        page_text (str): The input Markdown text containing tables without separators.
 
     Returns:
-        str: Structured text representing the table's content.
+        str: The structured text summarizing the tables.
     """
-    # Split the table into lines and process
-    lines = table_text.strip().split('\n')
-    headers = lines[0].strip('|').split('|')  # Extract headers
-    rows = [line.strip('|').split('|') for line in lines[2:]]  # Skip separator line
+    structured_output = []
 
-    # Clean whitespace and convert each row
-    structured_rows = []
-    for row in rows:
-        row_text = ', '.join([f"{headers[i].strip()}: {cell.strip()}" for i, cell in enumerate(row)])
-        structured_rows.append(f"- {row_text}")
-
-    return '\n'.join(structured_rows)
-
-def enrich_markdown_table_with_structured_text(markdown_text):
-    """
-    Replace Markdown tables in a document with their structured text equivalent.
-
-    Args:
-        markdown_text (str): The Markdown document containing tables.
-
-    Returns:
-        str: The Markdown document with tables converted to structured text.
-    """
-    enriched_markdowns = []
-    table_regex = r"(.*?)(\|[^\n]+\|(?:\n\|[^\n]+\|)+)"
-    matches = re.findall(table_regex, markdown_text, flags=re.DOTALL)
+    # Regex to match tables based on pipe structure
+    table_regex = r"(.*?)(\|[^\n]+\|\n(?:\|[^\n]+\|\n?)*)"
+    matches = re.findall(table_regex, page_text, flags=re.DOTALL)
 
     for match in matches:
         surrounding_text = match[0].strip()
         table_text = match[1].strip()
 
-        # Convert the table to structured text
-        structured_text = convert_table_to_structured_text(table_text)
+        # Process the table into structured text
+        structured_table = convert_table_to_structured_text_without_separator(table_text)
 
-        # Reformat enriched table with structured text
-        enriched_table = f"{surrounding_text}\n\n{structured_text}\n"
-        enriched_markdowns.append(enriched_table)
+        # Combine with surrounding text for context
+        enriched_text = f"{surrounding_text}\n\n{structured_table}"
+        structured_output.append(enriched_text)
 
-    return "\n".join(enriched_markdowns)
+    return "\n\n---\n\n".join(structured_output)
 
-# Example Markdown with tables
-markdown_text = """
+def convert_table_to_structured_text_without_separator(table_text):
+    """
+    Convert a single Markdown table (without separator rows) into structured text.
+
+    Args:
+        table_text (str): The Markdown table.
+
+    Returns:
+        str: Structured text summarizing the table.
+    """
+    lines = table_text.strip().split("\n")
+    headers = lines[0].strip("|").split("|")
+    rows = [line.strip("|").split("|") for line in lines[1:]]
+
+    structured_output = []
+    for row in rows:
+        row_data = {headers[i].strip(): row[i].strip() for i in range(len(headers))}
+        structured_output.append(
+            " - " + ", ".join(f"{key}: {value}" for key, value in row_data.items())
+        )
+
+    return "\n".join(structured_output)
+
+# Example Input
+page_text = """
+## Project Status
+
+This section contains the current progress.
+
+| Phase               | Nov | Dec | Jan | Feb | Mar | Apr | May |
+| Design Approval     | X   |     |     |     |     |     |     |
+| Development Phase   |     | X   | X   |     |     |     |     |
+| Integration Testing |     |     |     | X   |     |     |     |
+| Beta Release        |     |     |     |     | X   |     |     |
+| Final Release       |     |     |     |     |     |     | X   |
+
+---
+
+### Budget Overview
+
+| Budget Category      | Allocated Amount (USD) | Spent Amount (USD) | % Utilized | Comments                        |
+| Development          | 200,000               | 125,000             | 62.5%      | Majority spent on dev tools.   |
+| Marketing            | 50,000                | 20,000              | 40%        | Initial campaign costs covered.|
+| QA and Testing       | 30,000                | 5,000               | 16.7%      | Reserved for integration phase.|
+| Contingency          | 20,000                | 0                   | 0%         | No emergencies to date.        |
 """
-# """
 
-# Process the Markdown
-enriched_markdown = enrich_markdown_table_with_structured_text(markdown_text)
-print(enriched_markdown)
+# Process and print
+structured_text = process_multiple_tables_without_separator(page_text)
+print(structured_text)
