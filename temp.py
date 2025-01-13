@@ -16,6 +16,9 @@ class Page:
 
 
 def get_pages(site, auth, space):
+    """
+    Fetch pages from the Confluence space using the REST API.
+    """
     headers = {"Content-Type": "application/json"}
     pages = []
     cql = f"space = {space} AND type = page"  # or blogpost
@@ -47,11 +50,13 @@ def get_pages(site, auth, space):
 
 
 def create_page_obj(page):
+    """
+    Create a Page object from raw page data.
+    """
     title = page["title"]
     url = page["_links"]["webui"]
     page_id = page["id"]
-    p = Page(title, url, page_id)
-    return p
+    return Page(title, url, page_id)
 
 
 def sort_pages(page_objs):
@@ -130,13 +135,3 @@ def create_hierarchy_audit(site, username, password, space):
     sorted_pages = sort_pages(page_objs)
     hierarchy = build_hierarchy(sorted_pages)
     return [serialize_page(page) for page in hierarchy]
-
-
-# Example usage:
-site_url = "https://yoursite.atlassian.net"
-username = "your_email@example.com"
-password = "your_password"
-space_key = "your_space_key"
-
-page_hierarchy = create_hierarchy_audit(site_url, username, password, space_key)
-print(json.dumps(page_hierarchy, indent=4))
