@@ -15,6 +15,10 @@ class PageInfo(models.Model):
         default='embedding_completed',  # Default is 'embedding_completed'
     )
     metadata = models.JSONField(default=dict)  # Additional metadata about the page (optional)
+    last_successful_page_id = models.IntegerField(null=True, blank=True)  # Store the last successfully processed page_id
+
+    # Track embedding status for each page, this could also be a map of page_id to embedding_status.
+    embedding_status_map = models.JSONField(default=dict, blank=True)  # A dictionary to track page embedding status
 
     def __str__(self):
         return f"Page ID: {self.page_id}, Status: {self.embedding_status}"
@@ -22,9 +26,6 @@ class PageInfo(models.Model):
     class Meta:
         db_table = 'page_info'  # Table name in the database
 
-
-from django.db import models
-import json
 
 class PageChunks(models.Model):
     chunk_id = models.AutoField(primary_key=True)  # Auto-increment unique identifier for each chunk
