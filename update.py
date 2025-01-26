@@ -1,145 +1,91 @@
 import threading
 import time
-import random
-from django.http import JsonResponse
+from datetime import datetime
+import numpy as np
+from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-
-# Dummy SpaceEmbeddingProgress object for simulation
-class SpaceEmbeddingProgress:
-    def __init__(self, space_name, embedding_status="Not Started", total_pages_to_embed=0):
-        self.space_name = space_name
-        self.embedding_status = embedding_status
-        self.total_pages_to_embed = total_pages_to_embed
-        self.current_embedding_page = 0
-        self.embedding_completed_page_ids = []
-        self.embedding_failed_page_ids = []
-        self.embedding_message = None
-        self.last_embedded_time = None
-
-# Simulated database for spaces
-space_db = {}
-
-# Simulated PageEmbedding database
-page_embeddings = []
+from .models import SpaceEmbeddingProgress, PageEmbedding
 
 
-def generate_pages(space):
-    """
-    Simulate a time-consuming page generation process (e.g., scraping).
-    Generates a random number of pages, with a 5-second delay for each page.
-    Replace this logic with your actual scraping or page retrieval code.
-    """
-    n_pages_max = 10  # Maximum number of pages to generate
-    n_pages = random.randint(1, n_pages_max)  # Randomly decide the number of pages
-    generated_pages = []
+# Function to generate pages (replace with actual scraping logic)
+def generate_pages(space, total_pages=5):
+    pages = []
+    for i in range(total_pages):
+        time.sleep(5)  # Simulate page generation delay (e.g., scraping)
+        pages.append({"page_id": i + 1, "content": f"Page {i + 1} content"})
+    return pages
 
-    for i in range(1, n_pages + 1):
-        time.sleep(5)  # Simulate a 5-second delay per page generation
-        generated_pages.append({
-            "page_id": i,
-            "content": f"Page {i} content generated for space: {space.space_name}"
-        })
+# Function to simulate embedding pages
+def embed_pages_in_background(space_id, pages_to_embed):
+    space = get_object_or_404(SpaceEmbeddingProgress, emb_id=space_id)
+    space.embedding_status = 'In-Progress'
+    space.save()
 
-    return generated_pages
+    for page in pages_to_embed:
+        page_id = page['page_id']
+        content = page['content']
+        encoded_data = {f"embedding_dim_{i}": np.random.rand() for i in range(5)}  # Simulate embedding data
 
+        try:
+            PageEmbedding.objects.create(
+                page_id=page_id,
+                space_name=space,
+                content=content,
+                encoded_data=encoded_data,
+                meta_data={"source": "scraped"},
+                type_of_data="text"
+            )
+            space.embedding_completed_page_ids.append({"page_id": page_id, "time": str(datetime.now())})
+        except Exception as e:
+            space.embedding_failed_page_ids.append({"page_id": page_id, "time": str(datetime.now())})
+            space.embedding_message = str(e)
 
-def embed_pages_in_background(space, pages_to_embed):
-    """
-    Function to simulate embedding pages in the background.
-    """
-    try:
-        for page in pages_to_embed:
-            page_id = page["page_id"]
-            content = page["content"]
+        space.current_embedding_page += 1
+        space.save()
 
-            # Simulate embedding logic with a small delay
-            time.sleep(2)
-            encoded_data = {f"embedding_dim_{i}": random.random() for i in range(5)}
+    # Mark the space status as completed if no failures occurred
+    space.embedding_status = 'Completed' if not space.embedding_failed_page_ids else 'Failed'
+    space.save()
 
-            # Simulate successful embedding
-            page_embeddings.append({
-                "page_id": page_id,
-                "space_name": space.space_name,
-                "content": content,
-                "encoded_data": encoded_data,
-            })
-            space.embedding_completed_page_ids.append({"page_id": page_id, "time": time.time()})
-            space.current_embedding_page += 1
-
-        space.embedding_status = "Completed"
-        space.last_embedded_time = time.time()
-
-    except Exception as e:
-        space.embedding_status = "Failed"
-        space.embedding_message = str(e)
-
-
+# API View: Start Embedding
 class StartEmbeddingAPIView(APIView):
-    """
-    API endpoint to start embedding pages.
-    """
     def post(self, request):
-        space_name = request.data.get('space_name')
-        force_embed = request.data.get('force_embed', False)
+        try:
+            space_name = request.data.get('space_name')
+            force_embed = request.data.get('force_embed', False)
 
-        if not space_name:
-            return Response({'error': 'space_name is required'}, status=status.HTTP_400_BAD_REQUEST)
+            if not space_name:
+                return Response({'error': 'space_name is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Get or create space object
-        space = space_db.get(space_name)
-        if not space:
-            space = SpaceEmbeddingProgress(space_name=space_name, embedding_status="In-Progress")
-            space_db[space_name] = space
-
-        if space.embedding_status == "Completed" and not force_embed:
-            return Response({'message': 'Embedding already completed', 'status': space.embedding_status})
-
-        # Start page generation in a thread
-        def start_embedding():
             try:
-                pages_to_embed = generate_pages(space)
-                space.total_pages_to_embed = len(pages_to_embed)
-                embed_pages_in_background(space, pages_to_embed)
-            except Exception as e:
-                space.embedding_status = "Failed"
-                space.embedding_message = str(e)
+                # Check if space already exists or needs to be created
+                space, created = SpaceEmbeddingProgress.objects.get_or_create(
+                    space_name=space_name,
+                    defaults={'embedding_status': 'In-Progress', 'total_pages_to_embed': 5}  # Example total pages
+                )
 
-        threading.Thread(target=start_embedding).start()
-        return Response({'message': 'Embedding started in background', 'space_name': space_name}, status=status.HTTP_200_OK)
+                if space.embedding_status == 'Completed' and not force_embed:
+                    return Response({
+                        'message': 'Embedding already completed',
+                        'status': space.embedding_status,
+                        'last_embedded_time': space.last_embedded_time
+                    })
 
+                # Generate pages in the background using threading
+                def background_task():
+                    pages_to_embed = generate_pages(space)
+                    embed_pages_in_background(space.emb_id, pages_to_embed)
 
-class PollEmbeddingStatusAPIView(APIView):
-    """
-    API endpoint to poll embedding status.
-    """
-    def get(self, request):
-        space_name = request.query_params.get('space_name')
-        if not space_name:
-            return Response({'error': 'space_name is required'}, status=status.HTTP_400_BAD_REQUEST)
+                embedding_thread = threading.Thread(target=background_task)
+                embedding_thread.start()
 
-        space = space_db.get(space_name)
-        if not space:
-            return Response({'error': 'space_name not found'}, status=status.HTTP_404_NOT_FOUND)
+                return Response({'message': 'Embedding started in background', 'space_id': space.emb_id}, status=status.HTTP_200_OK)
 
-        response = {
-            'space_name': space.space_name,
-            'embedding_status': space.embedding_status,
-            'total_pages_to_embed': space.total_pages_to_embed,
-            'current_embedding_page': space.current_embedding_page,
-            'embedding_completed_page_ids': space.embedding_completed_page_ids,
-            'embedding_failed_page_ids': space.embedding_failed_page_ids,
-            'embedding_message': space.embedding_message,
-            'last_embedded_time': space.last_embedded_time,
-        }
-        return Response(response, status=status.HTTP_200_OK)
+            except SpaceEmbeddingProgress.DoesNotExist:
+                return Response({'error': 'Failed to create or retrieve space'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-# URL Configuration
-from django.urls import path
-
-urlpatterns = [
-    path('start-embedding/', StartEmbeddingAPIView.as_view(), name='start_embedding'),
-    path('poll-embedding-status/', PollEmbeddingStatusAPIView.as_view(), name='poll_embedding_status'),
-]
