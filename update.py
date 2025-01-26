@@ -10,15 +10,27 @@ from .models import SpaceEmbeddingProgress, PageEmbedding
 
 
 # Function to generate pages (replace with actual scraping logic)
-def generate_pages(space, total_pages=5):
+def generate_pages(space, total_pages=None):
+    """
+    Generate pages with content. This simulates a page generation process.
+    total_pages defaults to space.total_pages_to_embed if not provided.
+    """
+    if total_pages is None:
+        total_pages = space.total_pages_to_embed  # Use the space's total_pages_to_embed value
+
     pages = []
     for i in range(total_pages):
         time.sleep(5)  # Simulate page generation delay (e.g., scraping)
         pages.append({"page_id": i + 1, "content": f"Page {i + 1} content"})
+    
     return pages
+
 
 # Function to simulate embedding pages
 def embed_pages_in_background(space_id, pages_to_embed):
+    """
+    Embed pages and update the database.
+    """
     space = get_object_or_404(SpaceEmbeddingProgress, emb_id=space_id)
     space.embedding_status = 'In-Progress'
     space.save()
@@ -29,15 +41,22 @@ def embed_pages_in_background(space_id, pages_to_embed):
         encoded_data = {f"embedding_dim_{i}": np.random.rand() for i in range(5)}  # Simulate embedding data
 
         try:
-            PageEmbedding.objects.create(
+            # Check if a PageEmbedding entry exists; if yes, update it
+            page_embedding, created = PageEmbedding.objects.update_or_create(
                 page_id=page_id,
                 space_name=space,
-                content=content,
-                encoded_data=encoded_data,
-                meta_data={"source": "scraped"},
-                type_of_data="text"
+                defaults={
+                    'content': content,
+                    'encoded_data': encoded_data,
+                    'meta_data': {"source": "scraped"},
+                    'type_of_data': "text"
+                }
             )
-            space.embedding_completed_page_ids.append({"page_id": page_id, "time": str(datetime.now())})
+            if created:
+                space.embedding_completed_page_ids.append({"page_id": page_id, "time": str(datetime.now())})
+            else:
+                space.embedding_updated_page_ids.append({"page_id": page_id, "time": str(datetime.now())})
+
         except Exception as e:
             space.embedding_failed_page_ids.append({"page_id": page_id, "time": str(datetime.now())})
             space.embedding_message = str(e)
@@ -48,6 +67,7 @@ def embed_pages_in_background(space_id, pages_to_embed):
     # Mark the space status as completed if no failures occurred
     space.embedding_status = 'Completed' if not space.embedding_failed_page_ids else 'Failed'
     space.save()
+
 
 # API View: Start Embedding
 class StartEmbeddingAPIView(APIView):
@@ -63,7 +83,10 @@ class StartEmbeddingAPIView(APIView):
                 # Check if space already exists or needs to be created
                 space, created = SpaceEmbeddingProgress.objects.get_or_create(
                     space_name=space_name,
-                    defaults={'embedding_status': 'In-Progress', 'total_pages_to_embed': 5}  # Example total pages
+                    defaults={
+                        'embedding_status': 'In-Progress',
+                        'total_pages_to_embed': 5  # Example total pages
+                    }
                 )
 
                 if space.embedding_status == 'Completed' and not force_embed:
@@ -88,4 +111,3 @@ class StartEmbeddingAPIView(APIView):
 
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
