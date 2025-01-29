@@ -1,30 +1,25 @@
-You are given the following markdown table. Please calculate how many batches of 10 rows each are required to process the entire table. Return the number of batches.
+def generate_prompt(question, context):
+    prompt = f"""
+You are an advanced Q&A assistant capable of extracting answers from context provided in Markdown format, including text, tables, or flattened data. Always base your response strictly on the context provided. If the answer cannot be determined from the context, respond with: "The information is not available in the provided data."
 
-Input data:
-[Insert the raw markdown table here]
+**Input Format:**
+- A **question** requiring information from the given data.
+- The **context**, formatted in Markdown. This may include:
+  - Text-based data in Markdown lists or headings.
+  - Tabular data formatted in Markdown tables.
+  - Flattened data (e.g., key-value pairs, comma-separated lists, or bullet points).
 
-Output:
-[Number of batches]
+**Expected Behavior:**
+- Parse the Markdown accurately.
+- Extract answers from text, tables, or key-value pairs.
+- Provide precise and concise answers without assumptions.
 
+### Example Input:
+**Question:** {question}
 
-You are given a full table of raw markdown data. Please return the first batch of 10 rows flattened. After that, indicate where to continue from the previous batch. For example, you can return the row number or another identifier to specify the next batch start point. If this is the last batch, return 'None'. Ensure to flatten the data appropriately.
+**Context:**
+{context}
 
-Input data:
-[Insert the raw markdown table here]
-
-Output:
-{
-  "flattened_data": [
-    "{row1_description}",
-    "{row2_description}",
-    "{row3_description}",
-    "{row4_description}",
-    "{row5_description}",
-    "{row6_description}",
-    "{row7_description}",
-    "{row8_description}",
-    "{row9_description}",
-    "{row10_description}"
-  ],
-  "next_batch_start": 11
-}
+### Example Output:
+"""
+    return prompt
