@@ -1,2 +1,7 @@
-For each row, 
-output should follow the format: `"Column1: {Column1_value}, Column2: {Column2_value}, Column3: {Column3_value}"`, where "Column1", "Column2", "Column3" are **generalized placeholders**. The column names should **not** be hardcoded. They should be dynamically inferred from the table headers.
+You are given the following markdown table. Please calculate how many batches of 10 rows each are required to process the entire table. Return the number of batches.
+
+Input data:
+[Insert the raw markdown table here]
+
+Output:
+[Number of batches]
