@@ -38,3 +38,44 @@ Example JSON Output:
     {{ "batch": 3, "start": 11, "end": 15 }}
 ]
 "
+
+
+    import json
+import ast
+
+def parse_llm_output(llm_output):
+    """
+    Try to parse the LLM output. First, attempt to use json.loads().
+    If it fails, fall back to ast.literal_eval() for handling trailing commas.
+
+    Args:
+        llm_output (str): The string output from LLM.
+
+    Returns:
+        list: Parsed list of batch iterations.
+    """
+    try:
+        
+        return json.loads(llm_output)
+    except json.JSONDecodeError:
+        # Fallback to ast.literal_eval() (for cases with trailing commas)
+        try:
+            return ast.literal_eval(llm_output)
+        except Exception as e:
+            print(f"Error parsing output: {e}")
+            return []
+
+# Example output from LLM
+llm_output = """
+[
+    { "batch": 1, "start": 1, "end": 5 },
+    { "batch": 2, "start": 6, "end": 10 },
+    { "batch": 3, "start": 11, "end": 15 },  # Trailing comma
+]
+"""
+
+# Parsing the LLM output
+batch_iterations = parse_llm_output(llm_output)
+
+print(batch_iterations)
+
