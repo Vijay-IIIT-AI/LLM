@@ -1,31 +1,29 @@
-import json
-import re
+input_markdown_text = """
+{Input markdown text here}
+"""
 
-def extract_json_from_output(llm_output):
-    """
-    Extract and parse the JSON content from the LLM output.
-    This function can handle both raw JSON and JSON inside a code block.
+# Define the task in the prompt
+prompt = f"""
+Please process the following markdown text and generate the top 10 chunks from the content. 
+Each chunk should be a plain text portion that can be used for retrieval-augmented generation (RAG). 
+If there are tables, each row should be split into separate chunks. 
+Prioritize sections or paragraphs with significant content, and include as much detail as possible.
 
-    Args:
-        llm_output (str): The string output from LLM, which could be raw JSON or wrapped in a code block.
+Input:
+{input_markdown_text}
 
-    Returns:
-        list: Parsed list of JSON content or empty list if parsing fails.
-    """
-    # First, check if the content is inside a code block (e.g., ```json)
-    json_block_pattern = r'```json\s*(.*?)\s*```'
-    match = re.search(json_block_pattern, llm_output, re.DOTALL)
+Return the chunks as a list of strings like this:
 
-    if match:
-        # Extract content inside the JSON block
-        json_content = match.group(1).strip()
-    else:
-        # If no code block is found, assume the content is raw JSON
-        json_content = llm_output.strip()
-
-    # Try to parse the content as JSON
-    try:
-        return json.loads(json_content)
-    except json.JSONDecodeError:
-        print(f"Error parsing JSON content: {json_content}")
-        return []
+```json
+[
+  "Chunk 1 text...",
+  "Chunk 2 text...",
+  "Chunk 3 text...",
+  "Chunk 4 text...",
+  "Chunk 5 text...",
+  "Chunk 6 text...",
+  "Chunk 7 text...",
+  "Chunk 8 text...",
+  "Chunk 9 text...",
+  "Chunk 10 text..."
+]
