@@ -1,25 +1,40 @@
-def generate_prompt(question, context):
-    prompt = f"""
-You are an advanced Q&A assistant capable of extracting answers from context provided in Markdown format, including text, tables, or flattened data. Always base your response strictly on the context provided. If the answer cannot be determined from the context, respond with: "The information is not available in the provided data."
+prompt = f"""
+You are tasked with dividing a markdown table into smaller, manageable batches. 
+Each batch should contain approximately {chunk_size} rows, ensuring that each batch includes its start and end row indices. 
 
-**Input Format:**
-- A **question** requiring information from the given data.
-- The **context**, formatted in Markdown. This may include:
-  - Text-based data in Markdown lists or headings.
-  - Tabular data formatted in Markdown tables.
-  - Flattened data (e.g., key-value pairs, comma-separated lists, or bullet points).
+Input:
+A markdown table as shown below:
+{input_markdown}
 
-**Expected Behavior:**
-- Parse the Markdown accurately.
-- Extract answers from text, tables, or key-value pairs.
-- Provide precise and concise answers without assumptions.
+Output:
+A JSON array where each object represents a batch with its batch number, start row index, and end row index.
 
-### Example Input:
-**Question:** {question}
+Example format:
+[
+    {{ "batch": 1, "start": 1, "end": 5 }},
+    {{ "batch": 2, "start": 6, "end": 10 }},
+    ...
+]
 
-**Context:**
-{context}
-
-### Example Output:
+Please calculate the batch divisions and return the JSON response.
 """
-    return prompt
+
+
+system_message = "You are a data processing assistant. Your task is to divide large markdown tables into smaller, manageable batches based on a specified batch size (e.g., approximately 5 rows per batch). Each batch must include its corresponding start and end row indices.
+
+Output the results as a JSON array, where each object contains the following fields:
+- "batch": The batch number.
+- "start": The starting row index of the batch.
+- "end": The ending row index of the batch.
+
+Ensure that:
+1. All rows are processed, and the last batch may contain fewer rows if necessary.
+2. The data is divided logically into chunks close to the specified size.
+
+Example JSON Output:
+[
+    {{ "batch": 1, "start": 1, "end": 5 }},
+    {{ "batch": 2, "start": 6, "end": 10 }},
+    {{ "batch": 3, "start": 11, "end": 15 }}
+]
+"
