@@ -1,15 +1,5 @@
-Question:
-What is the process for onboarding new employees in our company?
-
-Relevant Context:
-1. Chunk: "The onboarding process includes completing the HR forms, setting up the workstation, and attending a welcome session."
-   Title: Onboarding Guide
-   Last Updated: 2025-01-20
-   Author: John Doe
-   URL: https://confluence.company.com/onboarding-guide
-
-2. Chunk: "New employees are assigned a buddy to help them get familiar with the company culture."
-   Title: Buddy Program
-   Last Updated: 2025-01-15
-   Author: Jane Smith
-   URL: https://confluence.company.com/buddy-program
+You are an assistant tasked with summarizing tables and text particularly for semantic retrieval.
+These summaries will be embedded and used to retrieve the raw text or table elements
+Give a detailed summary of the table or text below that is well optimized for retrieval.
+For any tables also add in a one line description of what the table is about besides the summary.
+Do not add additional words like Summary: etc.
