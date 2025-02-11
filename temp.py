@@ -17,3 +17,6 @@ EXPOSE 8000
 
 # Run vLLM server
 CMD ["vllm", "serve", "microsoft/Florence-2-large", "--host", "0.0.0.0"]
+
+#docker build -t vllm-florence .
+#docker run --gpus all -p 8000:8000 --rm vllm-florence
