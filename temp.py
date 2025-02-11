@@ -1,5 +1,19 @@
-You are an assistant tasked with summarizing tables and text particularly for semantic retrieval.
-These summaries will be embedded and used to retrieve the raw text or table elements
-Give a detailed summary of the table or text below that is well optimized for retrieval.
-For any tables also add in a one line description of what the table is about besides the summary.
-Do not add additional words like Summary: etc.
+# Use a Python base image
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+WORKDIR /app
+
+# Install Python
+RUN apt update && apt install -y python3 python3-pip && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install vLLM
+RUN pip install --no-cache-dir vllm
+
+# Expose the API port
+EXPOSE 8000
+
+# Run vLLM server
+CMD ["vllm", "serve", "microsoft/Florence-2-large", "--host", "0.0.0.0"]
