@@ -49,3 +49,7 @@ CMD ["vllm", "serve", "/app/models/Florence-2-large", "--host", "0.0.0.0"]
 docker run --gpus all -p 8000:8000 --rm \
     -v $(pwd)/Florence-2-large:/app/models/Florence-2-large \
     vllm-florence
+
+CMD ["vllm", "serve", "--model", "microsoft/Florence-2-base", \
+     "--tokenizer", "facebook/bart-base", \
+     "--trust-remote-code"]
