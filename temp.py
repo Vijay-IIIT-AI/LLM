@@ -53,3 +53,11 @@ docker run --gpus all -p 8000:8000 --rm \
 CMD ["vllm", "serve", "--model", "microsoft/Florence-2-base", \
      "--tokenizer", "facebook/bart-base", \
      "--trust-remote-code"]
+
+docker run --gpus all -p 8000:8000 --rm \
+    -v $(pwd)/Florence-2-large:/app/models/Florence-2-large \
+    vllm-florence \
+    vllm serve --model /app/models/Florence-2-large \
+               --tokenizer facebook/bart-base \
+               --trust-remote-code
+
