@@ -45,3 +45,7 @@ EXPOSE 8000
 
 # Run vLLM server with the local model
 CMD ["vllm", "serve", "/app/models/Florence-2-large", "--host", "0.0.0.0"]
+
+docker run --gpus all -p 8000:8000 --rm \
+    -v $(pwd)/Florence-2-large:/app/models/Florence-2-large \
+    vllm-florence
