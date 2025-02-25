@@ -8,6 +8,7 @@ import chromadb
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from unsloth import FastVisionModel
+from tqdm import tqdm
 
 # Configuration Variables
 MODEL_NAME = "unsloth/Llama-3.2-11B-Vision-Instruct"
@@ -17,6 +18,8 @@ CHUNK_RETRIEVAL_COUNT = 3
 # Load Models Globally
 def initialize_system():
     global vision_model, vision_tokenizer, embedding_model, chroma_client
+    
+    print("Initializing models and database...")
     
     # Load Vision Model
     vision_model, vision_tokenizer = FastVisionModel.from_pretrained(
@@ -45,7 +48,9 @@ def process_base64_image(base64_string):
 def process_ppt_slides(dataframe, batch_size=3):
     extracted_data = []
     
-    for i in range(0, len(dataframe), batch_size):
+    print("Processing slides...")
+    
+    for i in tqdm(range(0, len(dataframe), batch_size), desc="Extracting slides"):
         batch = dataframe.iloc[i:i+batch_size]
         images = [process_base64_image(row["Base64Data"]) for _, row in batch.iterrows() if row["Base64Data"]]
         slide_numbers = batch["SlideNumber"].tolist()
@@ -123,6 +128,8 @@ def find_top_n_slides(query, slides_df, top_n=CHUNK_RETRIEVAL_COUNT):
 
 # Function for Query Processing and Response Generation
 def query_pipeline(user_query, slides_df):
+    print("Searching for relevant slides...")
+    
     relevant_slides = find_top_n_slides(user_query, slides_df)
     if relevant_slides.empty:
         print("No relevant slides found.")
@@ -159,7 +166,7 @@ user_query = "Summarize the key findings from the financial report slides."
 retrieved_images_base64 = query_pipeline(user_query, slides_df)
 
 if retrieved_images_base64:
-    retrieved_images = [process_base64_image(img) for img in retrieved_images_base64 if img]
+    retrieved_images = [process_base64_image(img) for img in tqdm(retrieved_images_base64, desc="Processing retrieved images") if img]
     model_response = generate_response_from_images(retrieved_images, user_query)
 else:
     model_response = "No relevant images found."
