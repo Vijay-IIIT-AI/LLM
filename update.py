@@ -1,113 +1,87 @@
-import threading
-import time
-from datetime import datetime
+from unsloth import FastVisionModel
+from transformers import TextStreamer
+import torch
+from PIL import Image
+from sentence_transformers import SentenceTransformer
 import numpy as np
-from django.shortcuts import get_object_or_404
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from .models import SpaceEmbeddingProgress, PageEmbedding
 
+# Load Vision LLM model
+model, tokenizer = FastVisionModel.from_pretrained(
+    "unsloth/Llama-3.2-11B-Vision-Instruct",
+    load_in_4bit=True,
+    device_map="auto"
+)
+FastVisionModel.for_inference(model)
 
-# Function to generate pages (replace with actual scraping logic)
-def generate_pages(space, total_pages=None):
+# Load embedding model
+embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+
+# Function to process image
+def process_image(image_path):
+    image = Image.open(image_path).convert("RGB")
+    return image
+
+# Function to generate structured text from slide image
+def extract_text_from_image(image):
+    prompt = """
+    Extract all key information from this PowerPoint slide. Provide structured output in the following format:
+
+    Title: [Extracted Slide Title]
+    Headings: [List of Main Headings]
+    Bullet Points: [List of Key Bullet Points]
+    Tables: [Extracted Table Data]
+    Graphs: [Description of Graphs and Key Insights]
+    Figures & Images: [Summary of Any Figures or Images]
+
+    Ensure the output is detailed and structured, making it useful for retrieval and Q&A.
     """
-    Generate pages with content. This simulates a page generation process.
-    total_pages defaults to space.total_pages_to_embed if not provided.
-    """
-    if total_pages is None:
-        total_pages = space.total_pages_to_embed  # Use the space's total_pages_to_embed value
 
-    pages = []
-    for i in range(total_pages):
-        time.sleep(5)  # Simulate page generation delay (e.g., scraping)
-        pages.append({"page_id": i + 1, "content": f"Page {i + 1} content"})
-    
-    return pages
+    messages = [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": prompt}]}]
+    input_text = tokenizer.apply_chat_template(messages, add_generation_prompt=True)
 
+    inputs = tokenizer(
+        images=[image],
+        text=input_text,
+        add_special_tokens=False,
+        return_tensors="pt"
+    ).to("cuda")
 
-# Function to simulate embedding pages
-def embed_pages_in_background(space_id, pages_to_embed):
-    """
-    Embed pages and update the database.
-    """
-    space = get_object_or_404(SpaceEmbeddingProgress, emb_id=space_id)
-    space.embedding_status = 'In-Progress'
-    space.save()
+    output_ids = model.generate(**inputs, max_new_tokens=300, use_cache=True, temperature=1.0)
+    response_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
 
-    for page in pages_to_embed:
-        page_id = page['page_id']
-        content = page['content']
-        encoded_data = {f"embedding_dim_{i}": np.random.rand() for i in range(5)}  # Simulate embedding data
+    return response_text
 
-        try:
-            # Check if a PageEmbedding entry exists; if yes, update it
-            page_embedding, created = PageEmbedding.objects.update_or_create(
-                page_id=page_id,
-                space_name=space,
-                defaults={
-                    'content': content,
-                    'encoded_data': encoded_data,
-                    'meta_data': {"source": "scraped"},
-                    'type_of_data': "text"
-                }
-            )
-            if created:
-                space.embedding_completed_page_ids.append({"page_id": page_id, "time": str(datetime.now())})
-            else:
-                space.embedding_updated_page_ids.append({"page_id": page_id, "time": str(datetime.now())})
+# Function to embed extracted text
+def embed_text(text):
+    return embedding_model.encode(text, convert_to_numpy=True)
 
-        except Exception as e:
-            space.embedding_failed_page_ids.append({"page_id": page_id, "time": str(datetime.now())})
-            space.embedding_message = str(e)
+# Function to find top-N relevant slides
+def find_top_n_slides(query, slides_text, slides_images, top_n=3):
+    query_embedding = embed_text(query)
+    slides_embeddings = np.array([embed_text(text) for text in slides_text])
 
-        space.current_embedding_page += 1
-        space.save()
+    similarities = np.dot(slides_embeddings, query_embedding)  # Cosine similarity
+    top_n_indices = np.argsort(similarities)[-top_n:][::-1]
 
-    # Mark the space status as completed if no failures occurred
-    space.embedding_status = 'Completed' if not space.embedding_failed_page_ids else 'Failed'
-    space.save()
+    return [(slides_text[i], slides_images[i]) for i in top_n_indices]
 
+# Main processing loop
+slides = ["slide1.jpg", "slide2.jpg", "slide3.jpg"]  # Replace with actual slide paths
+extracted_texts = []
+slide_images = []
 
-# API View: Start Embedding
-class StartEmbeddingAPIView(APIView):
-    def post(self, request):
-        try:
-            space_name = request.data.get('space_name')
-            force_embed = request.data.get('force_embed', False)
+for slide in slides:
+    img = process_image(slide)
+    text = extract_text_from_image(img)
+    extracted_texts.append(text)
+    slide_images.append(img)
 
-            if not space_name:
-                return Response({'error': 'space_name is required'}, status=status.HTTP_400_BAD_REQUEST)
+# Example query for retrieval
+query = "Summarize the key financial data from the slides."
+top_slides = find_top_n_slides(query, extracted_texts, slide_images, top_n=3)
 
-            try:
-                # Check if space already exists or needs to be created
-                space, created = SpaceEmbeddingProgress.objects.get_or_create(
-                    space_name=space_name,
-                    defaults={
-                        'embedding_status': 'In-Progress',
-                        'total_pages_to_embed': 5  # Example total pages
-                    }
-                )
+# Pass top slides to LLM for final Q&A
+final_context = "\n\n".join([text for text, _ in top_slides])
+answer = extract_text_from_image(final_context)  # Reuse function for Q&A
 
-                if space.embedding_status == 'Completed' and not force_embed:
-                    return Response({
-                        'message': 'Embedding already completed',
-                        'status': space.embedding_status,
-                        'last_embedded_time': space.last_embedded_time
-                    })
-
-                # Generate pages in the background using threading
-                def background_task():
-                    pages_to_embed = generate_pages(space)
-                    embed_pages_in_background(space.emb_id, pages_to_embed)
-
-                embedding_thread = threading.Thread(target=background_task)
-                embedding_thread.start()
-
-                return Response({'message': 'Embedding started in background', 'space_id': space.emb_id}, status=status.HTTP_200_OK)
-
-            except SpaceEmbeddingProgress.DoesNotExist:
-                return Response({'error': 'Failed to create or retrieve space'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+print("Final Answer:\n", answer)
