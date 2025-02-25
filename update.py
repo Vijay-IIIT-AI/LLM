@@ -87,15 +87,18 @@ answer = extract_text_from_image(final_context)  # Reuse function for Q&A
 print("Final Answer:\n", answer)
 
 prompt_image = (
-    "Extract all key information from this PowerPoint slide. Provide structured output in the following format:\n\n"
-    "Title: [Extracted Slide Title]\n"
-    "Headings: [List of Main Headings]\n"
-    "Bullet Points: [List of Key Bullet Points]\n"
-    "Tables: [Extracted Table Data]\n"
-    "Graphs: [Description of Graphs and Key Insights]\n"
-    "Figures & Images: [Summary of Any Figures or Images]\n\n"
-    "Ensure the output is detailed and structured, making it useful for retrieval and Q&A."
+    "Extract all available information from this PowerPoint slide while strictly avoiding hallucinating any missing content.\n\n"
+    "Provide structured output in the following format:\n\n"
+    "Title: [Extracted Slide Title or null if not present]\n"
+    "Headings: [List of Main Headings or null if none]\n"
+    "Bullet Points: [List of Key Bullet Points or null if none]\n"
+    "Tables: [Extracted Table Data exactly as it appears, or null if no tables]\n"
+    "Graphs: [Detailed description of graphs, including key data insights, or null if no graphs]\n"
+    "Figures & Images: [Summarize any figures or images present, or null if none]\n\n"
+    "**Final Summary:** Provide a concise, well-structured explanation of what this slide conveys in a single paragraph.\n\n"
+    "Ensure the extracted data is precise and complete. Do not infer or generate content that is not present on the slide."
 )
+
 
 prompt_image = (
     "Extract all texts from this presentation slide (literal extraction, do not summarize!) and tabular data. When an image or diagram is present, describe it.\n"
