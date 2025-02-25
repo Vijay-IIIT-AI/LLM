@@ -87,18 +87,18 @@ answer = extract_text_from_image(final_context)  # Reuse function for Q&A
 print("Final Answer:\n", answer)
 
 prompt_image = (
-    "Extract all available information from this PowerPoint slide while strictly avoiding hallucinating any missing content.\n\n"
-    "Provide structured output in the following format:\n\n"
-    "Title: [Extracted Slide Title or null if not present]\n"
-    "Headings: [List of Main Headings or null if none]\n"
-    "Bullet Points: [List of Key Bullet Points or null if none]\n"
-    "Tables: [Extracted Table Data exactly as it appears, or null if no tables]\n"
-    "Graphs: [Detailed description of graphs, including key data insights, or null if no graphs]\n"
-    "Figures & Images: [Summarize any figures or images present, or null if none]\n\n"
-    "**Final Summary:** Provide a concise, well-structured explanation of what this slide conveys in a single paragraph.\n\n"
-    "Ensure the extracted data is precise and complete. Do not infer or generate content that is not present on the slide."
-    "**Important:** Respond only with the extracted information. Do not include this prompt in the response."
+    "Extract all available information from this PowerPoint slide without adding any interpretations, assumptions, or extra details.\n\n"
+    "Respond in the following structured format. If a section is not present in the slide, completely omit that field from the response:\n\n"
+    "Title: [Extracted Slide Title]\n"
+    "Headings: [List of Main Headings]\n"
+    "Bullet Points: [List of Key Bullet Points]\n"
+    "Tables: [Extracted Table Data exactly as it appears]\n"
+    "Graphs: [Detailed description of graphs, including key data insights]\n"
+    "Figures & Images: [Summarize any figures or images present]\n\n"
+    "**Final Summary:** Provide a **neutral, fact-based** summary of what this slide conveys in one paragraph. Do NOT add interpretations or insights beyond the provided data.\n\n"
+    "**Important:** Only return the extracted content. Do NOT include empty fields or placeholders for missing data. If a section does not exist in the slide, do not mention it."
 )
+
 
 
 prompt_image = (
