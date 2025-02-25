@@ -97,6 +97,7 @@ prompt_image = (
     "Figures & Images: [Summarize any figures or images present, or null if none]\n\n"
     "**Final Summary:** Provide a concise, well-structured explanation of what this slide conveys in a single paragraph.\n\n"
     "Ensure the extracted data is precise and complete. Do not infer or generate content that is not present on the slide."
+    "**Important:** Respond only with the extracted information. Do not include this prompt in the response."
 )
 
 
