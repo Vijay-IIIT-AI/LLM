@@ -85,3 +85,14 @@ final_context = "\n\n".join([text for text, _ in top_slides])
 answer = extract_text_from_image(final_context)  # Reuse function for Q&A
 
 print("Final Answer:\n", answer)
+
+prompt_image = (
+    "Extract all key information from this PowerPoint slide. Provide structured output in the following format:\n\n"
+    "Title: [Extracted Slide Title]\n"
+    "Headings: [List of Main Headings]\n"
+    "Bullet Points: [List of Key Bullet Points]\n"
+    "Tables: [Extracted Table Data]\n"
+    "Graphs: [Description of Graphs and Key Insights]\n"
+    "Figures & Images: [Summary of Any Figures or Images]\n\n"
+    "Ensure the output is detailed and structured, making it useful for retrieval and Q&A."
+)
