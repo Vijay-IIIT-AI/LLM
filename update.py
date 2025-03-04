@@ -73,3 +73,8 @@ def extract_ppt_slides(pptx_path, output_folder):
     print(f"Slides extracted successfully to {ppt_output_folder}")
 
     return df
+
+conda config --set proxy_servers.http http://user:password@proxyIP:proxyPort/
+conda config --set proxy_servers.https http://user:password@proxyIP:proxyPort/
+conda config --show | findstr "proxy"
+
