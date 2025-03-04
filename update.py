@@ -1,138 +1,107 @@
-from unsloth import FastVisionModel
-from transformers import TextStreamer
-import torch
-from PIL import Image
-from sentence_transformers import SentenceTransformer
-import numpy as np
-
-# Load Vision LLM model
-model, tokenizer = FastVisionModel.from_pretrained(
-    "unsloth/Llama-3.2-11B-Vision-Instruct",
-    load_in_4bit=True,
-    device_map="auto"
+vision_llm_prompt = (
+    "# Vision LLM Prompt for PPT Data Extraction\n\n"
+    "## **Task**  \n"
+    "You are an AI that extracts structured data from PowerPoint slide images, including text, tables, and graphs.\n\n"
+    
+    "## **Instructions**  \n"
+    "1. Extract all visible text from the slide.  \n"
+    "2. Identify key elements such as:  \n"
+    "   - Titles, headings, and bullet points.  \n"
+    "   - Tables (convert them into structured data).  \n"
+    "   - Graphs (extract labels, axis titles, trends, and any visible numerical values).  \n"
+    "3. If the slide contains a graph:  \n"
+    "   - Identify the type of graph (e.g., bar chart, line graph, pie chart).  \n"
+    "   - Extract axis labels and key numerical values if visible.  \n"
+    "   - Summarize the trend or insights from the graph.  \n"
+    "4. **Format the extracted data in JSON, excluding empty fields** "
+    "(e.g., if no table is present, `'tables'` should not appear in the output).  \n\n"
+    
+    "---\n\n"
+    
+    "## **Input**  \n"
+    "- A PowerPoint **slide image**.  \n\n"
+    
+    "---\n\n"
+    
+    "## **Output Format (JSON)**  \n"
+    "If the slide contains a table, graph, and text:\n\n"
+    
+    '{\n'
+    '    "slide_title": "Quarterly Sales Performance",\n'
+    '    "content": [\n'
+    '        "Company revenue increased by 15% in Q4",\n'
+    '        "Product A saw the highest growth at 25%",\n'
+    '        "Market share improved compared to competitors"\n'
+    '    ],\n'
+    '    "tables": [\n'
+    '        {\n'
+    '            "columns": ["Region", "Sales ($)", "Growth (%)"],\n'
+    '            "rows": [\n'
+    '                ["North America", "1,200,000", "12%"],\n'
+    '                ["Europe", "950,000", "10%"],\n'
+    '                ["Asia", "800,000", "15%"]\n'
+    '            ]\n'
+    '        }\n'
+    '    ],\n'
+    '    "graphs": [\n'
+    '        {\n'
+    '            "type": "line_chart",\n'
+    '            "title": "Sales Growth Over Time",\n'
+    '            "x_axis": "Quarters",\n'
+    '            "y_axis": "Revenue ($)",\n'
+    '            "key_values": {\n'
+    '                "Q1": "800,000",\n'
+    '                "Q2": "900,000",\n'
+    '                "Q3": "1,050,000",\n'
+    '                "Q4": "1,200,000"\n'
+    '            },\n'
+    '            "trend": "Steady increase in revenue with the highest growth in Q4."\n'
+    '        }\n'
+    '    ]\n'
+    '}\n\n'
+    
+    "If the slide does not contain a table, the output should exclude the `'tables'` key:\n\n"
+    
+    '{\n'
+    '    "slide_title": "Quarterly Sales Performance",\n'
+    '    "content": [\n'
+    '        "Company revenue increased by 15% in Q4",\n'
+    '        "Product A saw the highest growth at 25%",\n'
+    '        "Market share improved compared to competitors"\n'
+    '    ],\n'
+    '    "graphs": [\n'
+    '        {\n'
+    '            "type": "line_chart",\n'
+    '            "title": "Sales Growth Over Time",\n'
+    '            "x_axis": "Quarters",\n'
+    '            "y_axis": "Revenue ($)",\n'
+    '            "key_values": {\n'
+    '                "Q1": "800,000",\n'
+    '                "Q2": "900,000",\n'
+    '                "Q3": "1,050,000",\n'
+    '                "Q4": "1,200,000"\n'
+    '            },\n'
+    '            "trend": "Steady increase in revenue with the highest growth in Q4."\n'
+    '        }\n'
+    '    ]\n'
+    '}\n\n'
+    
+    "If the slide contains only text (no tables or graphs), the output should exclude both `'tables'` and `'graphs'` keys:\n\n"
+    
+    '{\n'
+    '    "slide_title": "Quarterly Sales Performance",\n'
+    '    "content": [\n'
+    '        "Company revenue increased by 15% in Q4",\n'
+    '        "Product A saw the highest growth at 25%",\n'
+    '        "Market share improved compared to competitors"\n'
+    '    ]\n'
+    '}\n\n'
+    
+    "---\n\n"
+    
+    "## **Additional Rules**  \n"
+    "- **DO NOT** include `'tables'` if no table is present.  \n"
+    "- **DO NOT** include `'graphs'` if no graph is present.  \n"
+    "- **DO NOT** miss any extracted text, numbers, or visual insights.  \n"
+    "- Ensure all extracted data is **accurate and well-structured**.  \n"
 )
-FastVisionModel.for_inference(model)
-
-# Load embedding model
-embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-
-# Function to process image
-def process_image(image_path):
-    image = Image.open(image_path).convert("RGB")
-    return image
-
-# Function to generate structured text from slide image
-def extract_text_from_image(image):
-    prompt = """
-    Extract all key information from this PowerPoint slide. Provide structured output in the following format:
-
-    Title: [Extracted Slide Title]
-    Headings: [List of Main Headings]
-    Bullet Points: [List of Key Bullet Points]
-    Tables: [Extracted Table Data]
-    Graphs: [Description of Graphs and Key Insights]
-    Figures & Images: [Summary of Any Figures or Images]
-
-    Ensure the output is detailed and structured, making it useful for retrieval and Q&A.
-    """
-
-    messages = [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": prompt}]}]
-    input_text = tokenizer.apply_chat_template(messages, add_generation_prompt=True)
-
-    inputs = tokenizer(
-        images=[image],
-        text=input_text,
-        add_special_tokens=False,
-        return_tensors="pt"
-    ).to("cuda")
-
-    output_ids = model.generate(**inputs, max_new_tokens=300, use_cache=True, temperature=1.0)
-    response_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
-
-    return response_text
-
-# Function to embed extracted text
-def embed_text(text):
-    return embedding_model.encode(text, convert_to_numpy=True)
-
-# Function to find top-N relevant slides
-def find_top_n_slides(query, slides_text, slides_images, top_n=3):
-    query_embedding = embed_text(query)
-    slides_embeddings = np.array([embed_text(text) for text in slides_text])
-
-    similarities = np.dot(slides_embeddings, query_embedding)  # Cosine similarity
-    top_n_indices = np.argsort(similarities)[-top_n:][::-1]
-
-    return [(slides_text[i], slides_images[i]) for i in top_n_indices]
-
-# Main processing loop
-slides = ["slide1.jpg", "slide2.jpg", "slide3.jpg"]  # Replace with actual slide paths
-extracted_texts = []
-slide_images = []
-
-for slide in slides:
-    img = process_image(slide)
-    text = extract_text_from_image(img)
-    extracted_texts.append(text)
-    slide_images.append(img)
-
-# Example query for retrieval
-query = "Summarize the key financial data from the slides."
-top_slides = find_top_n_slides(query, extracted_texts, slide_images, top_n=3)
-
-# Pass top slides to LLM for final Q&A
-final_context = "\n\n".join([text for text, _ in top_slides])
-answer = extract_text_from_image(final_context)  # Reuse function for Q&A
-
-print("Final Answer:\n", answer)
-
-prompt_image = (
-    "Extract all available information from this PowerPoint slide without adding any interpretations, assumptions, or extra details.\n\n"
-    "Respond in the following structured format. If a section is not present in the slide, completely omit that field from the response:\n\n"
-    "Title: [Extracted Slide Title]\n"
-    "Headings: [List of Main Headings]\n"
-    "Bullet Points: [List of Key Bullet Points]\n"
-    "Tables: [Extracted Table Data exactly as it appears]\n"
-    "Graphs: [Detailed description of graphs, including key data insights]\n"
-    "Figures & Images: [Summarize any figures or images present]\n\n"
-    "**Final Summary:** Provide a **neutral, fact-based** summary of what this slide conveys in one paragraph. Do NOT add interpretations or insights beyond the provided data.\n\n"
-    "**Important:** Only return the extracted content. Do NOT include empty fields or placeholders for missing data. If a section does not exist in the slide, do not mention it."
-)
-
-
-
-prompt_image = (
-    "Extract all texts from this presentation slide (literal extraction, do not summarize!) and tabular data. When an image or diagram is present, describe it.\n"
-    "When a graph with data is present, describe what it represents in detail, with key messages on data points. When extracting texts, those that are part of a diagram or graph should be only extracted within this context, not within the 'text' category.\n"
-    "Give only one final JSON - do not give any code.\n\n"
-    "Write the extracted contents in JSON format, following this structure:\n\n"
-    "[\n"
-    "    {\n"
-    "        \"heading\": \"Example slide heading\",\n"
-    "        \"text\": \"Example text on the slide\",\n"
-    "        \"images\": [\n"
-    "            \"Example image or diagram description\",\n"
-    "            \"Example image or diagram description\",\n"
-    "            \"Example image or diagram description\"\n"
-    "        ],\n"
-    "        \"graphs\": [\n"
-    "            \"Example graph description\"\n"
-    "        ]\n"
-    "    }\n"
-    "]\n\n"
-    "If there is any part missing (like there is no heading on the slide), just represent it as null.\n"
-    "Output the JSON file. Make sure your response is a VALID JSON! Do not put backticks around the output.\n\n"
-    "SYNTACTICALLY CORRECT EXAMPLE RESPONSE:\n"
-    "[\n"
-    "    {\n"
-    "        \"slide_heading\": \"Ecological Threat Report 2023\",\n"
-    "        \"subheading\": null,\n"
-    "        \"text\": \"Key Findings\\nCountry Hotspots\\nEcological Threats\\nMegacities\\nPolicy Recommendations\",\n"
-    "        \"images\": [\n"
-    "            \"Example image\"\n"
-    "        ],\n"
-    "        \"graphs\": []\n"
-    "    }\n"
-    "]"
-)
-
