@@ -20,3 +20,6 @@ elif os.name == "nt":  # Windows
 else:
     print("Unknown OS detected. Exiting.")
     sys.exit(1)
+
+set HTTP_PROXY=http://your-proxy-server:port
+set HTTPS_PROXY=https://your-proxy-server:port
