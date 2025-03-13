@@ -2,30 +2,29 @@ import torch
 import gc
 
 def unload_unsloth_model(model, tokenizer=None):
-    """
-    Safely unloads the Unsloth model and tokenizer from memory without affecting other CUDA models.
-    
-    Args:
-    - model (torch.nn.Module): The Unsloth model instance.
-    - tokenizer (Optional): The tokenizer associated with the model (if applicable).
-    """
+
     if model is not None:
-        # Move the model to CPU first to safely free GPU memory
-        model.to("cpu")
-        
-        # Delete model reference
-        del model
+        try:
+            # Check if model is quantized (8-bit via bitsandbytes)
+            if hasattr(model, "quantization_method") and model.quantization_method == "bitsandbytes":
+                print("Detected 8-bit model (bitsandbytes). Using special cleanup.")
+                del model  # Directly delete without moving to CPU
+            else:
+                print("Detected standard PyTorch model. Moving to CPU before deletion.")
+                model.to("cpu")
+                del model
+        except Exception as e:
+            print(f"Error during model unloading: {e}")
 
     if tokenizer is not None:
-        # Delete tokenizer reference
         del tokenizer
 
-    # Run garbage collection to free up Python memory
+    # Run garbage collection to free memory
     gc.collect()
 
-    # Free unused GPU memory (won't affect other models in CUDA)
+    # Free only unused GPU memory (won’t affect other models)
     torch.cuda.empty_cache()
-    torch.cuda.ipc_collect()  # Optional: Helps clean inter-process shared memory
+    torch.cuda.ipc_collect()
 
-# Example usage
+# Example usage:
 unload_unsloth_model(model, tokenizer)
