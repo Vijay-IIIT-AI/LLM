@@ -1,30 +1,8 @@
-import torch
-import gc
+def encode_image(image_path):
+    """Convert image to base64 (only needed for local files)."""
+    with open(image_path, "rb") as img_file:
+        return f"data:image/jpeg;base64,{base64.b64encode(img_file.read()).decode()}"
 
-def unload_unsloth_model(model, tokenizer=None):
-
-    if model is not None:
-        try:
-            # Check if model is quantized (8-bit via bitsandbytes)
-            if hasattr(model, "quantization_method") and model.quantization_method == "bitsandbytes":
-                print("Detected 8-bit model (bitsandbytes). Using special cleanup.")
-                del model  # Directly delete without moving to CPU
-            else:
-                print("Detected standard PyTorch model. Moving to CPU before deletion.")
-                model.to("cpu")
-                del model
-        except Exception as e:
-            print(f"Error during model unloading: {e}")
-
-    if tokenizer is not None:
-        del tokenizer
-
-    # Run garbage collection to free memory
-    gc.collect()
-
-    # Free only unused GPU memory (won’t affect other models)
-    torch.cuda.empty_cache()
-    torch.cuda.ipc_collect()
-
-# Example usage:
-unload_unsloth_model(model, tokenizer)
+# List of image paths
+image_paths = ["image1.jpg", "image2.jpg", "image3.jpg"]
+image_urls = [encode_image(img) for img in image_paths]
