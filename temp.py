@@ -1,82 +1,32 @@
-import asyncio
-import base64
-import os
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from vllm.engine.async_llm_engine import AsyncLLMEngine
-from vllm.engine.arg_utils import AsyncEngineArgs
+import requests
+import json
 
-app = FastAPI()
+BASE_URL = "http://127.0.0.1:8000"
 
-# Global model engine
-vision_model_engine = None
+def test_load_model():
+    """Tests the /load_model endpoint."""
+    response = requests.post(f"{BASE_URL}/load_model", json={"model_path": "TheBloke/LLaVA-1.5-7B-GGUF"})
+    print("Load Model Response:", response.status_code, response.json())
 
-class VisionPromptRequest(BaseModel):
-    question: str
-    image_paths: list[str]
-
-# Function to encode images to base64
-def encode_image(image_path):
-    """Encodes an image to base64 format."""
-    if not os.path.exists(image_path):
-        raise FileNotFoundError(f"Image file not found: {image_path}")
-    with open(image_path, "rb") as image_file:
-        return base64.b64encode(image_file.read()).decode("utf-8")
-
-# Function to process images into vLLM format
-def process_images(image_paths):
-    """Processes multiple image paths into vLLM-compatible format."""
-    return [
-        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encode_image(img_path)}"}}
-        for img_path in image_paths
-    ]
-
-@app.post("/load_model")
-async def load_model(model_path: str = "TheBloke/LLaVA-1.5-7B-GGUF"):
-    """Loads the vision model globally."""
-    global vision_model_engine
-    if vision_model_engine is not None:
-        return {"message": "Model already loaded"}
+def test_prompt_vision():
+    """Tests the /prompt_vision endpoint."""
+    test_payload = {
+        "question": "What is in the image?",
+        "image_paths": ["path/to/image1.png", "path/to/image2.jpg"]
+    }
     
-    try:
-        engine_args = AsyncEngineArgs(
-            model=model_path,
-            max_model_len=4096,
-            max_num_seqs=16
-        )
-        vision_model_engine = AsyncLLMEngine.from_engine_args(engine_args)
-        return {"message": "Model loaded successfully"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Model loading failed: {str(e)}")
+    response = requests.post(f"{BASE_URL}/prompt_vision", json=test_payload)
+    print("Prompt Vision Response:", response.status_code, response.json())
 
-@app.post("/prompt_vision")
-async def prompt_vision(request: VisionPromptRequest):
-    """Processes vision prompt with text and images."""
-    global vision_model_engine
-    if vision_model_engine is None:
-        raise HTTPException(status_code=400, detail="Model not loaded. Call /load_model first.")
-
-    try:
-        # Convert images to required format
-        image_content = process_images(request.image_paths)
-
-        # Prepare the input payload
-        messages = [{
-            "role": "user",
-            "content": [
-                {"type": "text", "text": request.question},
-                *image_content
-            ],
-        }]
-
-        # Run async inference
-        async for output in vision_model_engine.chat(messages):
-            return {"response": output}
+if __name__ == "__main__":
+    print("Testing API Endpoints...\n")
     
-    except FileNotFoundError as fnf_error:
-        raise HTTPException(status_code=400, detail=str(fnf_error))
-    except ValueError as value_error:
-        raise HTTPException(status_code=400, detail=str(value_error))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
-
+    # Test Load Model
+    test_load_model()
+    
+    # Wait for the model to load before testing prompt (adjust sleep time if needed)
+    import time
+    time.sleep(5)  
+    
+    # Test Vision Prompt
+    test_prompt_vision()
