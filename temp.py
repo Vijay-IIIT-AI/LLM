@@ -3,6 +3,7 @@ import io
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
+import ast
 from langchain_experimental.agents import create_pandas_dataframe_agent
 from langchain_mistralai import ChatMistralAI
 
@@ -58,6 +59,29 @@ def clean_code(response):
         code = code[:-3]
     return code.strip()
 
+def check_code_safety(code):
+    """Passes the generated code to the LLM for safety classification."""
+    prompt = f"""
+    Analyze the following Python code and determine if it contains dangerous operations.
+    Dangerous operations include but are not limited to:
+    - File modifications (delete, move, rename)
+    - System commands execution
+    - Arbitrary code execution
+    - Network or subprocess operations
+    - File reading/writing
+    
+    Code:
+    ```python
+    {code}
+    ```
+    
+    Respond with only 'safe' or 'dangerous'.
+    """
+    response = llm.invoke(prompt)
+    classification = response.content.strip().lower() if hasattr(response, "content") else str(response).strip().lower()
+    
+    return classification == "safe"
+
 def generate_plot_code(query):
     """Generate valid Python plotting code using LLM."""
     prompt = f"""
@@ -66,9 +90,10 @@ def generate_plot_code(query):
     - The DataFrame is named `df`
     - No explanations or markdown formatting
     - Use the correct column names from the DataFrame: {list(df.columns)}
-    
+    - Always include `plt.show()` at the end
+
     Query: "{query}"
-    
+
     Return only the code.
     """
     response = llm.invoke(prompt)
@@ -80,14 +105,13 @@ def plot_executor(query):
         plot_code = generate_plot_code(query)
         print("Generated Code:\n", plot_code)  # Debugging output
         
-        if not plot_code or "plt" not in plot_code:
-            return "**ERROR:** LLM failed to generate a valid plot."
+        if not check_code_safety(plot_code):
+            return "**ERROR:** Generated code contains dangerous operations and will not be executed."
 
         # Ensure Matplotlib context
-        fig, ax = plt.subplots(figsize=(8, 6))
-        exec_globals = {"df": df, "plt": plt, "sns": sns, "ax": ax, "fig": fig}
+        exec_globals = {"df": df, "plt": plt, "sns": sns, "pd": pd}
         
-        exec(plot_code, exec_globals)  # Execute the generated plot code
+        exec(plot_code, exec_globals)
         
         return figure_to_base64()
     except Exception as e:
@@ -145,18 +169,3 @@ def route_query(query):
         return {"text": text_executor(query)}
     
     return {"error": "Query does not match any known operations."}
-
-# Example Queries
-queries = [
-    "Show a histogram of age distribution",
-    "What is the average salary?",
-    "Plot the salary distribution and calculate the mean salary",
-    "Plot a scatter plot of Age vs Salary and a boxplot of Salary",
-    "Tell me about Obama!"  # Should return "Invalid query"
-]
-
-for query in queries:
-    import time
-    time.sleep(5)
-    print(f"\n**Query:** {query}")
-    print(route_query(query))
