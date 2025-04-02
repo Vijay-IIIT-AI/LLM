@@ -13,17 +13,35 @@ llm = ChatMistralAI(
     max_retries=2
 )
 
+def load_data(file_path):
+    """Loads CSV or Excel file into a DataFrame, handling errors gracefully."""
+    try:
+        if file_path.endswith('.csv'):
+            df = pd.read_csv(file_path)
+        elif file_path.endswith(('.xls', '.xlsx')):
+            df = pd.read_excel(file_path)
+        else:
+            raise ValueError("Unsupported file format. Please provide CSV or Excel.")
+        
+        # Create a new agent for the loaded dataset
+        global df_agent
+        df_agent = create_pandas_dataframe_agent(llm, df, verbose=True, allow_dangerous_code=True)
+        
+        return df
+    
+    except Exception as e:
+        print(f"**ERROR:** Failed to load data - {str(e)}")
+        return None
+
 # Sample DataFrame
 df = pd.DataFrame({
     'Age': [23, 45, 32, 41, 27], 
     'Salary': [50000, 80000, 60000, 75000, 65000]
 })
 
-# Create DataFrame agent
+# Initialize DataFrame agent
 df_agent = create_pandas_dataframe_agent(
-    llm, df ,
-    verbose=True,
-    allow_dangerous_code=True,
+    llm, df, verbose=True, allow_dangerous_code=True
 )
 
 def figure_to_base64():
@@ -64,6 +82,9 @@ def plot_executor(query):
     try:
         plot_code = generate_plot_code(query)
         print("Generated Code:\n", plot_code)  # Debugging
+        
+        if not plot_code or "plt" not in plot_code:
+            return "**ERROR:** LLM failed to generate a valid plot."
 
         # Prepare a figure to ensure multiple plots are handled
         fig, ax = plt.subplots(figsize=(8, 6))
@@ -75,7 +96,6 @@ def plot_executor(query):
     except Exception as e:
         return f"**ERROR:** Execution failed - {str(e)}"
 
-
 def text_executor(query):
     """Handles text-based queries using the DataFrame agent."""
     try:
@@ -84,35 +104,67 @@ def text_executor(query):
     except Exception as e:
         return f"**ERROR:** Execution failed - {str(e)}"
 
-
 def classify_query(query):
-    """Classifies query into 'plot', 'text', or 'both'."""
+    """Classifies query into 'plot', 'text', 'both', or 'invalid' using dataset context."""
+
+    # Get dataset preview (first 5 rows) and column statistics
+    dataset_preview = df.head().to_string(index=False)
+    column_stats = df.describe().to_string()
+
     classification_prompt = f"""
-    Classify the following query into 'plot', 'text', or 'both' based on its intent.
-    Query: "{query}"
-    Answer with only 'plot', 'text', or 'both'.
-    """
-    response = llm.invoke(classification_prompt)
+    Given the following dataset preview and statistics:
     
-    return response.content.strip().lower() if hasattr(response, "content") else str(response).strip().lower()
+    Dataset Preview:
+    {dataset_preview}
+    
+    Column Statistics:
+    {column_stats}
+
+    Classify the following query into 'plot', 'text', 'both', or 'invalid'.
+    - If the query asks about columns that don't exist, return 'invalid'.
+    - If the query is about visualization, return 'plot'.
+    - If the query is about numerical/text analysis, return 'text'.
+    - If the query needs both, return 'both'.
+
+    Query: "{query}"
+    
+    Answer with only 'plot', 'text', 'both', or 'invalid'.
+    """
+
+    response = llm.invoke(classification_prompt)
+    classification = response.content.strip().lower() if hasattr(response, "content") else str(response).strip().lower()
+
+    if classification not in ["plot", "text", "both", "invalid"]:
+        return "invalid"
+
+    return classification
 
 def route_query(query):
     """Routes query to the appropriate executor."""
     classification = classify_query(query)
 
-    if classification == "both":
+    if classification == "invalid":
+        return {"error": "Invalid query. Please check column names and try again."}
+    elif classification == "both":
         return {"plot": plot_executor(query), "text": text_executor(query)}
     elif classification == "plot":
         return {"plot": plot_executor(query)}
     elif classification == "text":
         return {"text": text_executor(query)}
+    
     return {"error": "Query does not match any known operations."}
 
-# Example Usage
-query1 = "Show a histogram of age distribution"
-query2 = "What is the average salary?"
-query3 = "Plot the salary distribution and calculate the mean salary"
-query4 = "Plot a scatter plot of Age vs Salary and a boxplot of Salary"
+# Example Queries
+queries = [
+    "Show a histogram of age distribution",
+    "What is the average salary?",
+    "Plot the salary distribution and calculate the mean salary",
+    "Plot a scatter plot of Age vs Salary and a boxplot of Salary",
+    "Tell me about Obama!"  # Should return "Invalid query"
+]
 
-out = route_query(query1)  # Should return base64 image
-print(out)
+for query in queries:
+    import time
+    time.sleep(5)
+    print(f"\n**Query:** {query}")
+    print(route_query(query))
