@@ -23,12 +23,9 @@ def load_data(file_path):
         else:
             raise ValueError("Unsupported file format. Please provide CSV or Excel.")
         
-        # Create a new agent for the loaded dataset
         global df_agent
         df_agent = create_pandas_dataframe_agent(llm, df, verbose=True, allow_dangerous_code=True)
-        
         return df
-    
     except Exception as e:
         print(f"**ERROR:** Failed to load data - {str(e)}")
         return None
@@ -56,9 +53,9 @@ def clean_code(response):
     """Extracts Python code from LLM response by removing markdown and explanations."""
     code = response.strip()
     if code.startswith("```python"):
-        code = code[9:]  # Remove ```python
+        code = code[9:]
     if code.endswith("```"):
-        code = code[:-3]  # Remove ```
+        code = code[:-3]
     return code.strip()
 
 def generate_plot_code(query):
@@ -81,15 +78,15 @@ def plot_executor(query):
     """Handles plotting queries by generating and executing Python code for multiple plots."""
     try:
         plot_code = generate_plot_code(query)
-        print("Generated Code:\n", plot_code)  # Debugging
+        print("Generated Code:\n", plot_code)  # Debugging output
         
         if not plot_code or "plt" not in plot_code:
             return "**ERROR:** LLM failed to generate a valid plot."
 
-        # Prepare a figure to ensure multiple plots are handled
+        # Ensure Matplotlib context
         fig, ax = plt.subplots(figsize=(8, 6))
-        exec_globals = {"df": df, "plt": plt, "sns": sns, "ax": ax}
-
+        exec_globals = {"df": df, "plt": plt, "sns": sns, "ax": ax, "fig": fig}
+        
         exec(plot_code, exec_globals)  # Execute the generated plot code
         
         return figure_to_base64()
@@ -106,11 +103,9 @@ def text_executor(query):
 
 def classify_query(query):
     """Classifies query into 'plot', 'text', 'both', or 'invalid' using dataset context."""
-
-    # Get dataset preview (first 5 rows) and column statistics
     dataset_preview = df.head().to_string(index=False)
     column_stats = df.describe().to_string()
-
+    
     classification_prompt = f"""
     Given the following dataset preview and statistics:
     
@@ -130,19 +125,16 @@ def classify_query(query):
     
     Answer with only 'plot', 'text', 'both', or 'invalid'.
     """
-
+    
     response = llm.invoke(classification_prompt)
     classification = response.content.strip().lower() if hasattr(response, "content") else str(response).strip().lower()
-
-    if classification not in ["plot", "text", "both", "invalid"]:
-        return "invalid"
-
-    return classification
+    
+    return classification if classification in ["plot", "text", "both", "invalid"] else "invalid"
 
 def route_query(query):
     """Routes query to the appropriate executor."""
     classification = classify_query(query)
-
+    
     if classification == "invalid":
         return {"error": "Invalid query. Please check column names and try again."}
     elif classification == "both":
