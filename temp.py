@@ -5,11 +5,11 @@ from vllm.engine.arg_utils import AsyncEngineArgs
 from vllm.sampling_params import SamplingParams
 from pydantic import BaseModel
 import uvicorn
-from typing import List, Optional, Dict, Any
+from typing import List, Dict, Any
 import uuid
 import time
 
-app = FastAPI(title="vLLM LangChain Compatible API")
+app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
@@ -26,37 +26,28 @@ class Message(BaseModel):
 class ChatRequest(BaseModel):
     messages: List[Message]
     model: str = "meta-llama/Meta-Llama-3-8B-Instruct"
-    temperature: Optional[float] = 0.7
-    top_p: Optional[float] = 0.9
-    max_tokens: Optional[int] = 512
+    temperature: float = 0.7
+    top_p: float = 0.9
+    max_tokens: int = 512
 
-# Initialize engine
-engine_args = AsyncEngineArgs(
-    model="meta-llama/Meta-Llama-3-8B-Instruct",
-    tensor_parallel_size=1
+engine = AsyncLLMEngine.from_engine_args(
+    AsyncEngineArgs(model="meta-llama/Meta-Llama-3-8B-Instruct")
 )
-engine = AsyncLLMEngine.from_engine_args(engine_args)
 
-def format_to_llama3_prompt(messages: List[Message]) -> str:
-    """Convert messages to Llama 3 chat template format"""
-    B_INST, E_INST = "<|start_header_id|>", "<|end_header_id|>"
-    B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
-    BOS, EOS = "<|begin_of_text|>", "<|eot_id|>"
-    
-    prompt = BOS
-    for message in messages:
-        if message.role == "system":
-            prompt += f"{B_INST}system{E_INST}\n\n{B_SYS}{message.content}{E_SYS}"
+def format_llama3_prompt(messages: List[Message]) -> str:
+    prompt = ""
+    for msg in messages:
+        if msg.role == "system":
+            prompt += f"<|start_header_id|>system<|end_header_id|>\n\n{msg.content}<|eot_id|>"
         else:
-            prompt += f"{B_INST}{message.role}{E_INST}\n\n{message.content}{EOS}"
-    prompt += f"{B_INST}assistant{E_INST}\n\n"
+            prompt += f"<|start_header_id|>{msg.role}<|end_header_id|>\n\n{msg.content}<|eot_id|>"
+    prompt += "<|start_header_id|>assistant<|end_header_id|>\n\n"
     return prompt
 
 @app.post("/v1/chat/completions")
 async def chat_completions(request: ChatRequest):
     try:
-        # Format prompt according to Llama 3's chat template
-        prompt = format_to_llama3_prompt(request.messages)
+        prompt = format_llama3_prompt(request.messages)
         
         sampling_params = SamplingParams(
             temperature=request.temperature,
@@ -64,14 +55,18 @@ async def chat_completions(request: ChatRequest):
             max_tokens=request.max_tokens
         )
         
-        # Generate response
         request_id = str(uuid.uuid4())
-        output = None
-        async for request_output in engine.generate(prompt, sampling_params, request_id):
-            output = request_output
+        final_output = None
         
-        if not output:
-            raise HTTPException(status_code=500, detail="No generation output")
+        async for request_output in engine.generate(
+            prompt=prompt,
+            sampling_params=sampling_params,
+            request_id=request_id
+        ):
+            final_output = request_output
+        
+        if not final_output:
+            raise HTTPException(status_code=500, detail="No output generated")
         
         return {
             "id": f"chatcmpl-{uuid.uuid4()}",
@@ -82,18 +77,18 @@ async def chat_completions(request: ChatRequest):
                 "index": 0,
                 "message": {
                     "role": "assistant",
-                    "content": output.outputs[0].text,
+                    "content": final_output.outputs[0].text,
                 },
                 "finish_reason": "stop"
             }],
             "usage": {
-                "prompt_tokens": len(output.prompt_token_ids),
-                "completion_tokens": len(output.outputs[0].token_ids),
-                "total_tokens": len(output.prompt_token_ids) + len(output.outputs[0].token_ids)
+                "prompt_tokens": len(final_output.prompt_token_ids),
+                "completion_tokens": len(final_output.outputs[0].token_ids),
+                "total_tokens": len(final_output.prompt_token_ids) + len(final_output.outputs[0].token_ids)
             }
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
