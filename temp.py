@@ -5,12 +5,12 @@ from vllm.engine.arg_utils import AsyncEngineArgs
 from vllm.sampling_params import SamplingParams
 from pydantic import BaseModel
 import uvicorn
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import uuid
+import json
 
 app = FastAPI()
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,7 +19,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Request models
 class Message(BaseModel):
     role: str
     content: str
@@ -31,54 +30,51 @@ class ChatRequest(BaseModel):
     top_p: Optional[float] = 0.9
     max_tokens: Optional[int] = 512
 
-# Initialize the async engine
 engine_args = AsyncEngineArgs(model="meta-llama/Meta-Llama-3-8B-Instruct")
 engine = AsyncLLMEngine.from_engine_args(engine_args)
 
-async def generate_text(prompt: str, sampling_params: SamplingParams):
-    # Generate a unique request ID
+async def generate_text(prompt: str, sampling_params: SamplingParams) -> str:
     request_id = str(uuid.uuid4())
-    
-    # Create the generation stream with request_id
     results_generator = engine.generate(prompt, sampling_params, request_id)
-    
-    # Collect the results
     async for request_output in results_generator:
         return request_output.outputs[0].text
+    return ""
 
 @app.post("/v1/chat/completions")
-async def chat_completions(request: ChatRequest):
+async def chat_completions(request: ChatRequest) -> Dict[str, Any]:
     try:
-        # Convert messages to prompt (adjust for your model's chat template)
-        prompt = "\n".join([
-            f"{msg.role}: {msg.content}" 
-            for msg in request.messages
-        ])
+        # Format prompt according to Llama 3's chat template
+        prompt = "<|begin_of_text|>"
+        for msg in request.messages:
+            prompt += f"<|start_header_id|>{msg.role}<|end_header_id|>\n\n{msg.content}<|eot_id|>"
+        prompt += "<|start_header_id|>assistant<|end_header_id|>\n\n"
         
-        # Create sampling params from request
         sampling_params = SamplingParams(
             temperature=request.temperature,
             top_p=request.top_p,
             max_tokens=request.max_tokens
         )
         
-        # Generate response
         response_text = await generate_text(prompt, sampling_params)
         
         return {
+            "id": f"chatcmpl-{str(uuid.uuid4())}",
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": request.model,
             "choices": [{
+                "index": 0,
                 "message": {
                     "role": "assistant",
-                    "content": response_text
-                }
-            }]
+                    "content": response_text,
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 0,  # You can implement token counting
+                "completion_tokens": 0,
+                "total_tokens": 0
+            }
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
