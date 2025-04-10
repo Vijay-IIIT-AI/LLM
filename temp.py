@@ -1,18 +1,11 @@
-# run_api.py
-
 from fastapi import FastAPI
 from pydantic import BaseModel
 from vllm import LLM, SamplingParams
 import uvicorn
-import threading
 
-# Initialize FastAPI
 app = FastAPI()
-
-# Load vLLM model
 llm = LLM(model="meta-llama/Meta-Llama-3-8B-Instruct")
 
-# Request/Response structure
 class Message(BaseModel):
     role: str
     content: str
@@ -24,31 +17,44 @@ class ChatRequest(BaseModel):
     top_p: float = 0.95
     max_tokens: int = 256
 
-# Prompt formatter
 def format_prompt(messages):
-    prompt = "<|begin_of_text|>"
-    for msg in messages:
-        prompt += f"<|start_header_id|>{msg.role}<|end_header_id|>\n{msg.content}<|eot_id|>"
-    prompt += "<|start_header_id|>assistant<|end_header_id|>"
+    prompt = ""
+    for m in messages:
+        prompt += f"{m.role}: {m.content}\n"
+    prompt += "assistant: "
     return prompt
 
-# Route
 @app.post("/v1/chat/completions")
-async def chat_completion(request: ChatRequest):
-    prompt = format_prompt(request.messages)
+async def chat_completion(req: ChatRequest):
+    prompt = format_prompt(req.messages)
     sampling_params = SamplingParams(
-        temperature=request.temperature,
-        top_p=request.top_p,
-        max_tokens=request.max_tokens,
+        temperature=req.temperature,
+        top_p=req.top_p,
+        max_tokens=req.max_tokens,
     )
     outputs = llm.generate(prompt, sampling_params)
-    result = outputs[0].outputs[0].text
-    return {
-        "id": "chatcmpl-001",
-        "object": "chat.completion",
-        "choices": [{"message": {"role": "assistant", "content": result}}],
-    }
+    if not outputs or not outputs[0].outputs:
+        return {
+            "id": "chatcmpl-xyz",
+            "object": "chat.completion",
+            "choices": [],
+            "error": "no generation chunks were returned"
+        }
 
-# Auto-run server from script
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    output_text = outputs[0].outputs[0].text.strip()
+
+    return {
+        "id": "chatcmpl-xyz",
+        "object": "chat.completion",
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": output_text
+                },
+                "finish_reason": "stop"
+            }
+        ],
+        "model": req.model
+    }
