@@ -1,18 +1,25 @@
-def generate_plot_code(query):
-    """Convert a query into valid Python plotting code using matplotlib and seaborn."""
-    prompt = f"""
-    You are a Python plotting assistant. Convert the user query into pure, valid Python code using matplotlib and seaborn.
+def plot_executor(query):
+    """Generates and safely executes plotting code from a query."""
+    try:
+        print(" >> Plotting:", query)
+        plot_code = generate_plot_code(query)
+        print("Generated Plot Code:\n", plot_code)  # helpful for debugging
 
-    - Use the DataFrame named `df`
-    - Valid columns: {list(df.columns)}
-    - No markdown or explanation—return only executable Python code
-    - End with `plt.show()`
-    - Do NOT return multiple code snippets. Only a single complete script.
+        # Safety check
+        if not check_code_safety(plot_code):
+            return "**ERROR:** Generated code contains unsafe operations."
 
-    Query: "{query}"
+        # Syntax check before execution
+        try:
+            compile(plot_code, "<string>", "exec")
+        except SyntaxError as se:
+            return f"**ERROR:** Syntax error in generated code - {str(se)}"
 
-    Output:
-    """
-    response = llm.invoke(prompt)
-    raw_code = response.content if hasattr(response, "content") else str(response)
-    return clean_code(raw_code)
+        # Execution
+        exec_globals = {"df": df, "plt": plt, "sns": sns, "pd": pd}
+        exec(plot_code, exec_globals)
+
+        return figure_to_base64()
+
+    except Exception as e:
+        return f"**ERROR:** Plotting failed - {str(e)}"
