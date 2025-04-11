@@ -1,13 +1,11 @@
-docker build -t langchain-pandas-agent .
+    Rules:
+    - If the query references missing columns, respond: invalid
+    - If the query asks for visualization only: plot
+    - If the query asks for analysis only: text
+    - If both are needed: both
 
+    Query: "{query}"
 
-docker run --rm \
-  -e OPENAI_API_BASE="http://host.docker.internal:8000/v1" \
-  -e MODEL_NAME="models" \
-  langchain-pandas-agent
-
-
-   docker run --rm -it \
-     -v /path/to/your/project:/app \
-     --entrypoint bash \
-     langchain-pandas-agent
+    Respond with only one word: plot, text, both, or invalid.
+    DO NOT include any extra words or sentences.
+    Your entire response must be just one of the four words above.
