@@ -1,9 +1,23 @@
+def clean_code(response_text):
+    """Extracts and cleans raw Python code from LLM output."""
+    code = response_text.strip()
+
+    # Remove Markdown code block if present
+    if "```" in code:
+        code = code.split("```")
+        code = [c for c in code if not c.strip().lower().startswith("python")]
+        code = "".join(code)
+
+    return code.strip()
+
 def plot_executor(query):
     """Generates and safely executes plotting code from a query."""
     try:
         print(" >> Plotting:", query)
+
         plot_code = generate_plot_code(query)
-        print("Generated Plot Code:\n", plot_code)  # helpful for debugging
+        plot_code = clean_code(plot_code)
+        print("Generated Plot Code:\n", plot_code)
 
         # Safety check
         if not check_code_safety(plot_code):
