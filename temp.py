@@ -1,5 +1,8 @@
-CMD ["python", "-m", "vllm.entrypoints.openai.api_server", \
-     "--model", "/models/llama-3-8b", \
-     "--host", "0.0.0.0", \
-     "--port", "8000", \
-     "--dtype", "float16"]
+curl -X POST http://localhost:8000/v1/completions \
+     -H "Content-Type: application/json" \
+     -d '{
+           "model": "llama-3-8b",
+           "prompt": "What is the capital of France?",
+           "max_tokens": 50,
+           "temperature": 0.7
+         }'
