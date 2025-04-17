@@ -1,39 +1,64 @@
-def clean_code(response_text):
-    """Extracts and cleans raw Python code from LLM output."""
-    code = response_text.strip()
+1. General Data Overview
+What is the shape of the dataset?
 
-    # Remove Markdown code block if present
-    if "```" in code:
-        code = code.split("```")
-        code = [c for c in code if not c.strip().lower().startswith("python")]
-        code = "".join(code)
+(To understand the number of rows and columns.)
 
-    return code.strip()
+What are the column names and their data types?
 
-def plot_executor(query):
-    """Generates and safely executes plotting code from a query."""
-    try:
-        print(" >> Plotting:", query)
+(To get an overview of the dataset structure.)
 
-        plot_code = generate_plot_code(query)
-        plot_code = clean_code(plot_code)
-        print("Generated Plot Code:\n", plot_code)
+How many unique values are there in the 'Embarked' column?
 
-        # Safety check
-        if not check_code_safety(plot_code):
-            return "**ERROR:** Generated code contains unsafe operations."
+(To check the diversity of embarkation ports.)
 
-        # Syntax check before execution
-        try:
-            compile(plot_code, "<string>", "exec")
-        except SyntaxError as se:
-            return f"**ERROR:** Syntax error in generated code - {str(se)}"
+2. Missing Values and Data Cleaning
+Are there any missing values in the dataset?
 
-        # Execution
-        exec_globals = {"df": df, "plt": plt, "sns": sns, "pd": pd}
-        exec(plot_code, exec_globals)
+(To check for missing data in the dataset.)
 
-        return figure_to_base64()
+What is the percentage of missing data for each column?
 
-    except Exception as e:
-        return f"**ERROR:** Plotting failed - {str(e)}"
+(Helps you assess the severity of missing data.)
+
+Can you fill missing 'Age' values with the median?
+
+(To handle missing Age data by filling with the median.)
+
+3. Basic Statistical Analysis
+What are the basic statistics (mean, median, etc.) of the 'Age' column?
+
+(To get the key statistics of the Age column.)
+
+What is the average 'Fare' for passengers who survived?
+
+(To see how fare prices relate to survival.)
+
+What is the standard deviation of the 'Fare' column?
+
+(To understand how fares vary in the dataset.)
+
+4. Exploring Survival Data
+What is the overall survival rate?
+
+(To understand the percentage of passengers who survived.)
+
+How does survival rate differ by gender?
+
+(To check survival rates based on gender.)
+
+What is the survival rate for passengers in each passenger class?
+
+(To understand survival by class.)
+
+5. Age and Survival
+What is the average age of passengers who survived?
+
+(To determine if age played a role in survival.)
+
+Is there any correlation between age and survival?
+
+(To see if age was linked to survival chances.)
+
+How does survival rate vary across different age groups?
+
+(To explore survival by different age categories.)
