@@ -1,64 +1,39 @@
-1. General Data Overview
-What is the shape of the dataset?
+Average Fare by Class
 
-(To understand the number of rows and columns.)
+"What is the average fare paid by passengers in each class (Pclass)? Show as a bar chart."
 
-What are the column names and their data types?
+Survival Count by Gender
 
-(To get an overview of the dataset structure.)
+"How many males and females survived and how many didn't? Show as a grouped bar plot."
 
-How many unique values are there in the 'Embarked' column?
+Passenger Distribution by Embarkation Port
 
-(To check the diversity of embarkation ports.)
+"How many passengers boarded from each embarkation port (Embarked)?"
 
-2. Missing Values and Data Cleaning
-Are there any missing values in the dataset?
+Age Distribution of Survivors vs. Non-Survivors
 
-(To check for missing data in the dataset.)
+"Plot the age distribution of survivors and non-survivors using histograms or KDE curves."
 
-What is the percentage of missing data for each column?
+Top 10 Most Expensive Tickets
 
-(Helps you assess the severity of missing data.)
+"List the top 10 passengers who paid the highest fare, along with their name, class, and survival status."
 
-Can you fill missing 'Age' values with the median?
+Children vs. Adults Survival Rate
 
-(To handle missing Age data by filling with the median.)
+"Compare the survival rate of children (age < 16) vs. adults (age ≥ 16)."
 
-3. Basic Statistical Analysis
-What are the basic statistics (mean, median, etc.) of the 'Age' column?
+Class Distribution Among Survivors
 
-(To get the key statistics of the Age column.)
+"Among those who survived, what percentage belonged to each passenger class?"
 
-What is the average 'Fare' for passengers who survived?
+Fare Distribution by Survival Status
 
-(To see how fare prices relate to survival.)
+"How is the fare distributed for survivors vs. non-survivors? Use box plots or violin plots."
 
-What is the standard deviation of the 'Fare' column?
+Average Age of Survivors vs. Non-Survivors
 
-(To understand how fares vary in the dataset.)
+"What is the average age of passengers who survived compared to those who didn’t?"
 
-4. Exploring Survival Data
-What is the overall survival rate?
+Family Onboard vs. Traveling Alone
 
-(To understand the percentage of passengers who survived.)
-
-How does survival rate differ by gender?
-
-(To check survival rates based on gender.)
-
-What is the survival rate for passengers in each passenger class?
-
-(To understand survival by class.)
-
-5. Age and Survival
-What is the average age of passengers who survived?
-
-(To determine if age played a role in survival.)
-
-Is there any correlation between age and survival?
-
-(To see if age was linked to survival chances.)
-
-How does survival rate vary across different age groups?
-
-(To explore survival by different age categories.)
+"Compare the survival rate of passengers traveling alone vs. those with family (based on SibSp + Parch)."
