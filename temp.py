@@ -1,6 +1,6 @@
-import requests
 import os
 import win32com.client
+from atlassian import Confluence
 
 # Your Confluence URL, Username, Password, and Page ID
 CONFLUENCE_URL = 'https://your-confluence-instance/wiki'  # Replace with your Confluence instance URL
@@ -8,29 +8,28 @@ USERNAME = 'your-username'  # Replace with your Confluence username
 PASSWORD = 'your-password'  # Replace with your Confluence password
 PAGE_ID = '123456789'  # Replace with the actual page ID
 
-# Function to export the page as a .doc file
+# Function to export the page as a .doc file using Confluence API
 def export_page_to_doc(confluence_url, username, password, page_id):
-    # Create a session and authenticate with Confluence
-    session = requests.Session()
-    session.auth = (username, password)
+    # Create a Confluence instance
+    confluence = Confluence(
+        url=confluence_url,
+        username=username,
+        password=password
+    )
 
-    # API URL to get the page as Word (doc)
-    api_url = f'{confluence_url}/rest/api/content/{page_id}/export/word'
+    # Fetch the page as Word document
+    wordFile = confluence.get_page_as_word(page_id)
 
-    # Send the GET request to export the page
-    response = session.get(api_url)
-    response.raise_for_status()  # Raise an exception for HTTP errors
-
-    # Save the response content (which is the .doc file)
+    # Save the .doc file
     doc_file_path = "file.doc"
     with open(doc_file_path, "wb") as f2:
-        f2.write(response.content)
+        f2.write(wordFile)
 
     print(f"Page {page_id} exported successfully as '{doc_file_path}'.")
 
     return doc_file_path
 
-# Function to convert .doc file to Web Layout format (HTML)
+# Function to convert .doc file to Web Layout format (HTML) using Microsoft Word COM
 def convert_doc_to_web_layout(doc_file_path):
     # Create an instance of Microsoft Word
     word = win32com.client.Dispatch('Word.Application')
