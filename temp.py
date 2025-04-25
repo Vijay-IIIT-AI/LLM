@@ -1,13 +1,3 @@
-import os
-import win32com.client
-from atlassian import Confluence
-
-# Your Confluence URL, Username, Password, and Page ID
-CONFLUENCE_URL = 'https://your-confluence-instance/wiki'  # Replace with your Confluence instance URL
-USERNAME = 'your-username'  # Replace with your Confluence username
-PASSWORD = 'your-password'  # Replace with your Confluence password
-PAGE_ID = '123456789'  # Replace with the actual page ID
-
 # Function to export the page as a .doc file using Confluence API
 def export_page_to_doc(confluence_url, username, password, page_id):
     # Create a Confluence instance
@@ -20,8 +10,8 @@ def export_page_to_doc(confluence_url, username, password, page_id):
     # Fetch the page as Word document
     wordFile = confluence.get_page_as_word(page_id)
 
-    # Save the .doc file
-    doc_file_path = "file.doc"
+    # Use the page ID as the file name
+    doc_file_path = f"{page_id}.doc"
     with open(doc_file_path, "wb") as f2:
         f2.write(wordFile)
 
@@ -39,7 +29,7 @@ def convert_doc_to_web_layout(doc_file_path):
 
     try:
         # Open the .doc file in Word
-        doc = word.Documents.Open(doc_file_path)
+        doc = word.Documents.Open(os.path.abspath(doc_file_path))  # Ensure absolute path
 
         # Set the Web Layout view mode
         word.ActiveWindow.View.Type = 3  # Web Layout View (3 is for Web Layout)
@@ -53,7 +43,8 @@ def convert_doc_to_web_layout(doc_file_path):
         print(f"Error occurred: {e}")
     finally:
         # Close the document and Word application
-        doc.Close(False)
+        if 'doc' in locals():
+            doc.Close(False)
         word.Quit()
 
 # Main function to export and convert the page
