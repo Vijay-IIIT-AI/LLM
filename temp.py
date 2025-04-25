@@ -1,39 +1,38 @@
-Average Fare by Class
+import requests
+from docx import Document
 
-"What is the average fare paid by passengers in each class (Pclass)? Show as a bar chart."
+# Confluence credentials and URL
+CONFLUENCE_URL = 'https://your-confluence-instance/wiki'
+API_URL = f'{CONFLUENCE_URL}/rest/api/content'
+PAGE_ID = '123456789'  # Replace with the actual page ID
+USERNAME = 'your-username'
+PASSWORD = 'your-password'
 
-Survival Count by Gender
+# Create a session and authenticate with Confluence
+session = requests.Session()
+session.auth = (USERNAME, PASSWORD)
 
-"How many males and females survived and how many didn't? Show as a grouped bar plot."
+# Fetch page content from Confluence
+response = session.get(f'{API_URL}/{PAGE_ID}?expand=body.storage')
+response.raise_for_status()  # Ensure we got a successful response
 
-Passenger Distribution by Embarkation Port
+# Extract page title and content
+page_data = response.json()
+page_title = page_data['title']
+page_content = page_data['body']['storage']['value']
 
-"How many passengers boarded from each embarkation port (Embarked)?"
+# Create a new Word document
+doc = Document()
+doc.add_heading(page_title, 0)
 
-Age Distribution of Survivors vs. Non-Survivors
+# Add page content to the Word document
+doc.add_paragraph(page_content)
 
-"Plot the age distribution of survivors and non-survivors using histograms or KDE curves."
+# Add the page ID to the footer
+footer = doc.sections[0].footer
+footer.paragraphs[0].text = f"Page ID: {PAGE_ID}"
 
-Top 10 Most Expensive Tickets
+# Save the document as a .docx file
+doc.save(f'{page_title}.docx')
 
-"List the top 10 passengers who paid the highest fare, along with their name, class, and survival status."
-
-Children vs. Adults Survival Rate
-
-"Compare the survival rate of children (age < 16) vs. adults (age ≥ 16)."
-
-Class Distribution Among Survivors
-
-"Among those who survived, what percentage belonged to each passenger class?"
-
-Fare Distribution by Survival Status
-
-"How is the fare distributed for survivors vs. non-survivors? Use box plots or violin plots."
-
-Average Age of Survivors vs. Non-Survivors
-
-"What is the average age of passengers who survived compared to those who didn’t?"
-
-Family Onboard vs. Traveling Alone
-
-"Compare the survival rate of passengers traveling alone vs. those with family (based on SibSp + Parch)."
+print(f"Page '{page_title}' downloaded as Word document.")
