@@ -1,38 +1,70 @@
 import requests
-from docx import Document
+import os
+import win32com.client
 
-# Confluence credentials and URL
-CONFLUENCE_URL = 'https://your-confluence-instance/wiki'
-API_URL = f'{CONFLUENCE_URL}/rest/api/content'
+# Your Confluence URL, Username, Password, and Page ID
+CONFLUENCE_URL = 'https://your-confluence-instance/wiki'  # Replace with your Confluence instance URL
+USERNAME = 'your-username'  # Replace with your Confluence username
+PASSWORD = 'your-password'  # Replace with your Confluence password
 PAGE_ID = '123456789'  # Replace with the actual page ID
-USERNAME = 'your-username'
-PASSWORD = 'your-password'
 
-# Create a session and authenticate with Confluence
-session = requests.Session()
-session.auth = (USERNAME, PASSWORD)
+# Function to export the page as a .doc file
+def export_page_to_doc(confluence_url, username, password, page_id):
+    # Create a session and authenticate with Confluence
+    session = requests.Session()
+    session.auth = (username, password)
 
-# Fetch page content from Confluence
-response = session.get(f'{API_URL}/{PAGE_ID}?expand=body.storage')
-response.raise_for_status()  # Ensure we got a successful response
+    # API URL to get the page as Word (doc)
+    api_url = f'{confluence_url}/rest/api/content/{page_id}/export/word'
 
-# Extract page title and content
-page_data = response.json()
-page_title = page_data['title']
-page_content = page_data['body']['storage']['value']
+    # Send the GET request to export the page
+    response = session.get(api_url)
+    response.raise_for_status()  # Raise an exception for HTTP errors
 
-# Create a new Word document
-doc = Document()
-doc.add_heading(page_title, 0)
+    # Save the response content (which is the .doc file)
+    doc_file_path = "file.doc"
+    with open(doc_file_path, "wb") as f2:
+        f2.write(response.content)
 
-# Add page content to the Word document
-doc.add_paragraph(page_content)
+    print(f"Page {page_id} exported successfully as '{doc_file_path}'.")
 
-# Add the page ID to the footer
-footer = doc.sections[0].footer
-footer.paragraphs[0].text = f"Page ID: {PAGE_ID}"
+    return doc_file_path
 
-# Save the document as a .docx file
-doc.save(f'{page_title}.docx')
+# Function to convert .doc file to Web Layout format (HTML)
+def convert_doc_to_web_layout(doc_file_path):
+    # Create an instance of Microsoft Word
+    word = win32com.client.Dispatch('Word.Application')
 
-print(f"Page '{page_title}' downloaded as Word document.")
+    # Make Word visible (set to False if you don't want Word to be visible)
+    word.Visible = False
+
+    try:
+        # Open the .doc file in Word
+        doc = word.Documents.Open(doc_file_path)
+
+        # Set the Web Layout view mode
+        word.ActiveWindow.View.Type = 3  # Web Layout View (3 is for Web Layout)
+
+        # Save the file in Web Layout format (HTML format)
+        output_file_path = os.path.splitext(doc_file_path)[0] + '_web_layout.html'
+        doc.SaveAs(output_file_path, FileFormat=8)  # FileFormat 8 is for HTML
+
+        print(f"Conversion successful. File saved as: {output_file_path}")
+    except Exception as e:
+        print(f"Error occurred: {e}")
+    finally:
+        # Close the document and Word application
+        doc.Close(False)
+        word.Quit()
+
+# Main function to export and convert the page
+def main():
+    # Export the Confluence page as a .doc file
+    doc_file_path = export_page_to_doc(CONFLUENCE_URL, USERNAME, PASSWORD, PAGE_ID)
+    
+    # Convert the .doc file to Web Layout format (HTML)
+    convert_doc_to_web_layout(doc_file_path)
+
+# Run the main function
+if __name__ == '__main__':
+    main()
