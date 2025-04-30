@@ -37,3 +37,26 @@ Count the number of patients grouped by Recommendation.
 What is the correlation between heart rate and troponin levels?
 
 Find the range (max - min) of CK-MB values in the dataset.
+
+
+##
+
+Which combination of age group (e.g., <30, 30–60, >60) and gender has the highest average troponin level among positive cases?
+
+What is the correlation matrix between all numerical health indicators (heart rate, BP, blood sugar, CK-MB, troponin), and which pair has the strongest positive and negative correlation?
+
+Among high-risk patients, what is the average systolic-to-diastolic pressure ratio, and how does it compare between genders?
+
+What is the percentage of patients with CK-MB > 5 and Troponin > 0.5 who received the recommendation "Immediate medical attention"?
+
+Group patients by Risk_Level and find the average blood sugar, then rank Risk_Levels from highest to lowest based on this metric.
+
+Identify outliers in troponin levels using the IQR method and list the patient details for those outliers.
+
+What proportion of patients over age 60 with normal blood sugar (<140) still received a positive result?
+
+Perform K-means clustering (k=3) on CK-MB and Troponin levels to identify health risk clusters. Describe the cluster centers.
+
+Build a decision tree (basic logic, not ML) that infers the Risk_Level based on thresholds in blood sugar, systolic pressure, and troponin.
+
+Simulate a new “Severity Score” = (Troponin × 100) + (CK-MB × 10) + (Blood Sugar / 10), and analyze how this score aligns with the Risk_Level categories.
