@@ -1,0 +1,39 @@
+What is the average heart rate in the dataset?
+
+How many patients have a positive result?
+
+What is the maximum systolic blood pressure recorded?
+
+What are the unique values in the Risk_Level column?
+
+How many patients are over 50 years old?
+
+What is the mean CK-MB level for negative results?
+
+What is the gender distribution of the patients?
+
+How many patients have blood sugar levels above 200?
+
+What is the median troponin level?
+
+List all patients with high risk level.
+
+What is the minimum diastolic blood pressure for male patients?
+
+How many patients have both high blood sugar (>180) and positive result?
+
+What is the average systolic blood pressure grouped by Risk_Level?
+
+Show the patient(s) with the highest troponin level.
+
+What percentage of patients require immediate medical attention?
+
+What is the average age of patients with negative results?
+
+How many patients are under 30 with a positive result?
+
+Count the number of patients grouped by Recommendation.
+
+What is the correlation between heart rate and troponin levels?
+
+Find the range (max - min) of CK-MB values in the dataset.
