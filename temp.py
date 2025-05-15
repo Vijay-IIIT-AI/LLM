@@ -1,60 +1,26 @@
-# Function to export the page as a .doc file using Confluence API
-def export_page_to_doc(confluence_url, username, password, page_id):
-    # Create a Confluence instance
-    confluence = Confluence(
-        url=confluence_url,
-        username=username,
-        password=password
-    )
+You are an expert assistant analyzing a Confluence page. The input includes:
 
-    # Fetch the page as Word document
-    wordFile = confluence.get_page_as_word(page_id)
+- **Page Title:** {page_title}
+- **Page Metadata:** {page_metadata}  (e.g., author, creation date, tags)
+- **Page Tree Information:** {page_tree_info}  (e.g., parent page, child pages, hierarchy)
+- **Page Content:** (in Markdown, may include tables, headings, bullet points)
 
-    # Use the page ID as the file name
-    doc_file_path = f"{page_id}.doc"
-    with open(doc_file_path, "wb") as f2:
-        f2.write(wordFile)
+Your task is to:
 
-    print(f"Page {page_id} exported successfully as '{doc_file_path}'.")
+1. Generate a concise, clear summary of the page in 4–6 bullet points, integrating important information from the title, metadata, and tree context as relevant.
+2. Extract named entities mentioned in the page content and metadata, grouping them into logical dynamic categories. For example, these might include milestones, teams, dates, projects, tools, vendors, risks, action items, or any other relevant entity type.
+3. Return your output in this JSON structure:
 
-    return doc_file_path
-
-# Function to convert .doc file to Web Layout format (HTML) using Microsoft Word COM
-def convert_doc_to_web_layout(doc_file_path):
-    # Create an instance of Microsoft Word
-    word = win32com.client.Dispatch('Word.Application')
-
-    # Make Word visible (set to False if you don't want Word to be visible)
-    word.Visible = False
-
-    try:
-        # Open the .doc file in Word
-        doc = word.Documents.Open(os.path.abspath(doc_file_path))  # Ensure absolute path
-
-        # Set the Web Layout view mode
-        word.ActiveWindow.View.Type = 3  # Web Layout View (3 is for Web Layout)
-
-        # Save the file in Web Layout format (HTML format)
-        output_file_path = os.path.splitext(doc_file_path)[0] + '_web_layout.html'
-        doc.SaveAs(output_file_path, FileFormat=8)  # FileFormat 8 is for HTML
-
-        print(f"Conversion successful. File saved as: {output_file_path}")
-    except Exception as e:
-        print(f"Error occurred: {e}")
-    finally:
-        # Close the document and Word application
-        if 'doc' in locals():
-            doc.Close(False)
-        word.Quit()
-
-# Main function to export and convert the page
-def main():
-    # Export the Confluence page as a .doc file
-    doc_file_path = export_page_to_doc(CONFLUENCE_URL, USERNAME, PASSWORD, PAGE_ID)
-    
-    # Convert the .doc file to Web Layout format (HTML)
-    convert_doc_to_web_layout(doc_file_path)
-
-# Run the main function
-if __name__ == '__main__':
-    main()
+```json
+{
+  "summary": [
+    "Bullet point 1 summarizing key content or context",
+    "Bullet point 2",
+    "... up to 6 bullets"
+  ],
+  "entities": {
+    "category_1_name": ["entity 1", "entity 2"],
+    "category_2_name": ["entity A", "entity B"],
+    "... as many categories as relevant"
+  }
+}
