@@ -1,45 +1,38 @@
-from sentence_transformers import SentenceTransformer, CrossEncoder, util
+# Install necessary libraries (run this in a Jupyter notebook or a Python script with shell access)
+!pip install torch transformers
 
-# Step 1: Load models
-retriever = SentenceTransformer("paraphrase-MiniLM-L6-v2")
-reranker = CrossEncoder("BAAI/bge-reranker-v2-m3")  # Can swap with jinaai/jina-reranker-v2-base-multilingual
+# Import required libraries
+import torch
+from transformers import AutoTokenizer, AutoModelWithLMHead
 
-# Step 2: Define documents
-docs = [
-    "서울은 한국의 수도이다.",
-    "Seoul is the capital of South Korea.",
-    "한국의 봄은 매우 아름답다.",
-    "Spring in Korea is very beautiful.",
-    "The Eiffel Tower is located in Paris."
-]
+# Load tokenizer and model
+tokenizer = AutoTokenizer.from_pretrained('t5-base')
+model = AutoModelWithLMHead.from_pretrained('t5-base', return_dict=True)
 
-# Step 3: Define query
-query = "한국의 수도는 어디인가요?"
+# Define the input sequence (a Wikipedia passage about Data Science)
+sequence = (
+    "Data science is an interdisciplinary field[10] focused on extracting knowledge from typically large data sets and "
+    "applying the knowledge and insights from that data to solve problems in a wide range of application domains.[11] "
+    "The field encompasses preparing data for analysis, formulating data science problems, analyzing data, developing "
+    "data-driven solutions, and presenting findings to inform high-level decisions in a broad range of application domains. "
+    "As such, it incorporates skills from computer science, statistics, information science, mathematics, data visualization, "
+    "information visualization, data sonification, data integration, graphic design, complex systems, communication and business.[12][13] "
+    "Statistician Nathan Yau, drawing on Ben Fry, also links data science to human–computer interaction: users should be able "
+    "to intuitively control and explore data.[14][15] In 2015, the American Statistical Association identified database management, "
+    "statistics and machine learning, and distributed and parallel systems as the three emerging foundational professional communities.[16]"
+)
 
-# Step 4: Retrieve top-k candidates using bi-encoder
-doc_embeddings = retriever.encode(docs, convert_to_tensor=True)
-query_embedding = retriever.encode([query], convert_to_tensor=True)
-similarity_scores = util.pytorch_cos_sim(query_embedding, doc_embeddings)[0]
+# Tokenize the input for summarization
+inputs = tokenizer.encode(
+    "summarize: " + sequence,
+    return_tensors='pt',
+    max_length=512,
+    truncation=True
+)
 
-# Step 5: Select top N candidates
-top_k = 3  # Configurable
-top_indices = similarity_scores.topk(top_k).indices
-top_docs = [docs[i] for i in top_indices]
-top_doc_scores = [similarity_scores[i].item() for i in top_indices]
+# Generate summary
+output = model.generate(inputs, min_length=80, max_length=100)
 
-print("\n🔍 Top Retrieved Documents (Bi-Encoder):")
-for doc, score in zip(top_docs, top_doc_scores):
-    print(f"Score: {score:.4f} - {doc}")
-
-# Step 6: Prepare input for reranker (query, doc) pairs
-reranker_inputs = [(query, doc) for doc in top_docs]
-
-# Step 7: Rerank using cross-encoder
-rerank_scores = reranker.predict(reranker_inputs)
-
-# Step 8: Sort by reranker score
-final_ranking = sorted(zip(top_docs, rerank_scores), key=lambda x: x[1], reverse=True)
-
-print("\n🏆 Final Reranked Documents (Cross-Encoder):")
-for doc, score in final_ranking:
-    print(f"Score: {score:.4f} - {doc}")
+# Decode and print the summary
+summary = tokenizer.decode(output[0], skip_special_tokens=True)
+print(summary)
