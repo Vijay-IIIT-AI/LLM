@@ -1,50 +1,74 @@
-🔹 5 Questions on RAG
+pptx_path = r"/content/ML.pptx"
 
-Q1. What open-source package is introduced in the report for PDF document conversion?
-A1. Docling
+from docling.document_converter import DocumentConverter
 
-Q2. Which two specialized AI models power Docling’s pipeline?
-A2. A layout analysis model and TableFormer for table structure recognition
+# 1) Convert the PPTX using Docling
+converter = DocumentConverter()
+res = DocumentConverter().convert(pptx_path)
+doc = res.document
+original_texts = [item.text for item in doc.texts]
+print("Extracted texts:", original_texts)
 
-Q3. What is the role of Docling’s custom-built PDF parser docling-parse?
-A3. It retrieves text content with coordinates and renders PDF pages as images, powering the default backend
+# Step 2️⃣: Translate mapping (replace translate() with your API logic)
+from tqdm import tqdm
 
-Q4. Which OCR library does Docling initially rely on for scanned PDFs?
-A4. EasyOCR
+translation_map = {}
+for txt in tqdm(original_texts, desc="Translating PPT Text", unit="text"):
+    translation_map[txt] = translate(txt)
 
-Q5. What open-source package is provided to integrate Docling with retrieval-augmented generation (RAG) workflows?
-A5. Quackling
+from pptx import Presentation
+import time
 
-🔹 5 Questions on Image
 
-Q6. In Figure 1, what are the main sequential steps of Docling’s processing pipeline?
-A6. Parse PDF pages → Layout Analysis → Table Structure → OCR → Assemble results & post-processing → Serialize as JSON/Markdown
+# Step 3️⃣: Replace text in PPTX preserving formatting
+prs = Presentation(pptx_path)
+for slide in prs.slides:
+    print("Running Slide:", slide)
+    time.sleep(5)
 
-Q7. What does Figure 2 illustrate about the DocLayNet paper’s conversion to Markdown?
-A7. Metadata like authors is shown first, while text inside figures is dropped but captions are retained
+    for shape in slide.shapes:
+        # Text box content
+        if shape.has_text_frame:
+            for para in shape.text_frame.paragraphs:
+                for run in para.runs:
+                    orig = run.text.strip()
+                    if orig in translation_map:
+                        run.text = translation_map[orig]
 
-Q8. In Figure 3, what is suppressed in the Markdown output to ensure uninterrupted reading order?
-A8. Page headers and footers
+        # Table cell content
+        if shape.has_table:
+            for row in shape.table.rows:
+                for cell in row.cells:
+                    for para in cell.text_frame.paragraphs:
+                        for run in para.runs:
+                            orig = run.text.strip()
+                            if orig in translation_map:
+                                run.text = translation_map[orig]
 
-Q9. What does Figure 4 demonstrate about spanning table cells in Markdown vs JSON representations?
-A9. In Markdown, spanning cells are repeated in each column; in JSON, span info is preserved explicitly
+# Save your translated PPTX
+prs.save("/content/output_translated_KR.pptx")
+print("Saved as output_translated.pptx")
 
-Q10. According to Figure 5, around what dataset fraction does the learning curve flatten, showing diminishing returns?
-A10. Around 80% of the dataset
+import os
+import requests
+from time import sleep
 
-🔹 5 Questions on Table
+api_key = 
 
-Q11. In Table 1, which class label has the highest frequency in the DocLayNet dataset?
-A11. Text (510,377 instances)
+def translate(text: str, tgt: str = "Korean") -> str:
+    sleep(10)
+    url = "https://api.mistral.ai/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}"}
+    payload = {
+        "model": "mistral-small-latest",
+        "messages": [
+            {"role": "system", "content": f"You are a professional Korean translator to {tgt}.Just translate what is there don't give any extra information your just translator"},
+            {"role": "user", "content": text}
+        ]
+    }
+    resp = requests.post(url, headers=headers, json=payload)
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"]
 
-Q12. According to Table 1, what is the inter-annotator agreement range for the “Table” class label?
-A12. 77–81% mAP@0.5–0.95
-
-Q13. In Table 1, which class label has the lowest frequency of occurrences?
-A13. Title (5,071 instances)
-
-Q14. In Table 2, which object detection model achieves the highest mAP score for “Text”?
-A14. YOLOv5x6 (88.1)
-
-Q15. From Table 2, which element type did YOLOv5x6 outperform humans on?
-A15. Text, Table, and Picture
+# Test
+print(translate("Hello, how are you?", "Korean"))
