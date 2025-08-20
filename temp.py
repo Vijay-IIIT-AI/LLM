@@ -1,199 +1,50 @@
-#pip install datasets
-from unsloth import FastVisionModel
-from datasets import load_dataset
-from trl import SFTTrainer, SFTConfig
-from unsloth.trainer import UnslothVisionDataCollator
+🔹 5 Questions on RAG
 
-# Load model and tokenizer
-model, tokenizer = FastVisionModel.from_pretrained(
-    "unsloth/Qwen2-VL-72B-Instruct-bnb-4bit",
-    load_in_4bit=True,
-    use_gradient_checkpointing="unsloth"
-)
+Q1. What open-source package is introduced in the report for PDF document conversion?
+A1. Docling
 
-# Inject LoRA
-model = FastVisionModel.get_peft_model(
-    model,
-    finetune_vision_layers=True,
-    finetune_language_layers=True,
-    finetune_attention_modules=True,
-    finetune_mlp_modules=True,
-    r=16, lora_alpha=16, lora_dropout=0, bias="none"
-)
+Q2. Which two specialized AI models power Docling’s pipeline?
+A2. A layout analysis model and TableFormer for table structure recognition
 
-# Load and convert dataset
-dataset = load_dataset("unsloth/Radiology_mini", split="train")
-instruction = "You are a medical expert. What do you observe?"
-def convert(sample):
-    return {
-        "messages": [
-            {"role": "user", "content": [
-                {"type": "text", "text": instruction},
-                {"type": "image", "image": sample["image"]}
-            ]},
-            {"role": "assistant", "content": [
-                {"type": "text", "text": sample["caption"]}
-            ]}
-        ]
-    }
-converted_dataset = [convert(x) for x in dataset]
+Q3. What is the role of Docling’s custom-built PDF parser docling-parse?
+A3. It retrieves text content with coordinates and renders PDF pages as images, powering the default backend
 
-# Training
-FastVisionModel.for_training(model)
-trainer = SFTTrainer(
-    model=model,
-    tokenizer=tokenizer,
-    train_dataset=converted_dataset,
-    data_collator=UnslothVisionDataCollator(model, tokenizer),
-    args=SFTConfig(
-        per_device_train_batch_size=1,
-        gradient_accumulation_steps=4,
-        max_steps=30,
-        learning_rate=2e-4,
-        logging_steps=1,
-        output_dir="qwen72b_outputs",
-        optim="adamw_8bit",
-        lr_scheduler_type="linear",
-        remove_unused_columns=False,
-        dataset_text_field="",
-        dataset_kwargs={"skip_prepare_dataset": True},
-        max_seq_length=2048,
-        report_to="none",
-    )
-)
-trainer.train()
+Q4. Which OCR library does Docling initially rely on for scanned PDFs?
+A4. EasyOCR
 
-# ✅ Save to disk in 16bit (for vLLM)
-model.save_pretrained_merged("qwen72b_merged_fp16", tokenizer, save_method="merged_16bit")
+Q5. What open-source package is provided to integrate Docling with retrieval-augmented generation (RAG) workflows?
+A5. Quackling
 
+🔹 5 Questions on Image
 
-from unsloth import FastVisionModel # FastLanguageModel for LLMs
-import torch
+Q6. In Figure 1, what are the main sequential steps of Docling’s processing pipeline?
+A6. Parse PDF pages → Layout Analysis → Table Structure → OCR → Assemble results & post-processing → Serialize as JSON/Markdown
 
+Q7. What does Figure 2 illustrate about the DocLayNet paper’s conversion to Markdown?
+A7. Metadata like authors is shown first, while text inside figures is dropped but captions are retained
 
-model, tokenizer = FastVisionModel.from_pretrained(
-    "unsloth/Qwen2.5-VL-7B-Instruct-bnb-4bit",
-    load_in_4bit = True, # Use 4bit to reduce memory use. False for 16bit LoRA.
-    use_gradient_checkpointing = "unsloth", # True or "unsloth" for long context
-)
+Q8. In Figure 3, what is suppressed in the Markdown output to ensure uninterrupted reading order?
+A8. Page headers and footers
 
+Q9. What does Figure 4 demonstrate about spanning table cells in Markdown vs JSON representations?
+A9. In Markdown, spanning cells are repeated in each column; in JSON, span info is preserved explicitly
 
-model = FastVisionModel.get_peft_model(
-    model,
-    finetune_vision_layers     = True, # False if not finetuning vision layers
-    finetune_language_layers   = True, # False if not finetuning language layers
-    finetune_attention_modules = True, # False if not finetuning attention layers
-    finetune_mlp_modules       = True, # False if not finetuning MLP layers
+Q10. According to Figure 5, around what dataset fraction does the learning curve flatten, showing diminishing returns?
+A10. Around 80% of the dataset
 
-    r = 16,           # The larger, the higher the accuracy, but might overfit
-    lora_alpha = 16,  # Recommended alpha == r at least
-    lora_dropout = 0,
-    bias = "none",
-    random_state = 3407,
-    use_rslora = False,  # We support rank stabilized LoRA
-    loftq_config = None, # And LoftQ
-    # target_modules = "all-linear", # Optional now! Can specify a list if needed
-)
+🔹 5 Questions on Table
 
-from datasets import load_dataset
-dataset = load_dataset("unsloth/LaTeX_OCR", split = "train")
-instruction = "Write the LaTeX representation for this image."
+Q11. In Table 1, which class label has the highest frequency in the DocLayNet dataset?
+A11. Text (510,377 instances)
 
-def convert_to_conversation(sample):
-    conversation = [
-        { "role": "user",
-          "content" : [
-            {"type" : "text",  "text"  : instruction},
-            {"type" : "image", "image" : sample["image"]} ]
-        },
-        { "role" : "assistant",
-          "content" : [
-            {"type" : "text",  "text"  : sample["text"]} ]
-        },
-    ]
-    return { "messages" : conversation }
-pass
+Q12. According to Table 1, what is the inter-annotator agreement range for the “Table” class label?
+A12. 77–81% mAP@0.5–0.95
 
-converted_dataset = [convert_to_conversation(sample) for sample in dataset]
+Q13. In Table 1, which class label has the lowest frequency of occurrences?
+A13. Title (5,071 instances)
 
-FastVisionModel.for_inference(model) # Enable for inference!
+Q14. In Table 2, which object detection model achieves the highest mAP score for “Text”?
+A14. YOLOv5x6 (88.1)
 
-image = dataset[2]["image"]
-instruction = "Write the LaTeX representation for this image."
-
-messages = [
-    {"role": "user", "content": [
-        {"type": "image"},
-        {"type": "text", "text": instruction}
-    ]}
-]
-input_text = tokenizer.apply_chat_template(messages, add_generation_prompt = True)
-inputs = tokenizer(
-    image,
-    input_text,
-    add_special_tokens = False,
-    return_tensors = "pt",
-).to("cuda")
-
-from transformers import TextStreamer
-text_streamer = TextStreamer(tokenizer, skip_prompt = True)
-_ = model.generate(**inputs, streamer = text_streamer, max_new_tokens = 128,
-                   use_cache = True, temperature = 1.5, min_p = 0.1)
-
-from unsloth.trainer import UnslothVisionDataCollator
-from trl import SFTTrainer, SFTConfig
-
-FastVisionModel.for_training(model) # Enable for training!
-
-trainer = SFTTrainer(
-    model = model,
-    tokenizer = tokenizer,
-    data_collator = UnslothVisionDataCollator(model, tokenizer), # Must use!
-    train_dataset = converted_dataset,
-    args = SFTConfig(
-        per_device_train_batch_size = 2,
-        gradient_accumulation_steps = 4,
-        warmup_steps = 5,
-        max_steps = 30,
-        # num_train_epochs = 1, # Set this instead of max_steps for full training runs
-        learning_rate = 2e-4,
-        logging_steps = 1,
-        optim = "adamw_8bit",
-        weight_decay = 0.01,
-        lr_scheduler_type = "linear",
-        seed = 3407,
-        output_dir = "outputs",
-        report_to = "none",     # For Weights and Biases
-
-        # You MUST put the below items for vision finetuning:
-        remove_unused_columns = False,
-        dataset_text_field = "",
-        dataset_kwargs = {"skip_prepare_dataset": True},
-        max_length = 2048,
-    ),
-)
-trainer_stats = trainer.train()
-FastVisionModel.for_inference(model) # Enable for inference!
-
-image = dataset[2]["image"]
-instruction = "Write the LaTeX representation for this image."
-
-messages = [
-    {"role": "user", "content": [
-        {"type": "image"},
-        {"type": "text", "text": instruction}
-    ]}
-]
-input_text = tokenizer.apply_chat_template(messages, add_generation_prompt = True)
-inputs = tokenizer(
-    image,
-    input_text,
-    add_special_tokens = False,
-    return_tensors = "pt",
-).to("cuda")
-
-from transformers import TextStreamer
-text_streamer = TextStreamer(tokenizer, skip_prompt = True)
-_ = model.generate(**inputs, streamer = text_streamer, max_new_tokens = 128,
-                   use_cache = True, temperature = 1.5, min_p = 0.1)
-print(_)
+Q15. From Table 2, which element type did YOLOv5x6 outperform humans on?
+A15. Text, Table, and Picture
