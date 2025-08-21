@@ -193,7 +193,7 @@ def run_translation(mode, source, output=None, target_lang="Korean", max_slides=
 # Example Runs
 # --------------------------
 # PPTX example
-run_translation("pptx", r"/content/ML.pptx", "output_ko.pptx", target_lang="Korean", max_slides=12)
+run_translation("pptx", r"/content/P23_Research Data Analysis.pptx", "output_ko.pptx", target_lang="Korean", max_slides=12)
 
 # Text example
 # run_translation("text", "Hai", target_lang="Tamil")
