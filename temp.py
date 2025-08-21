@@ -11,6 +11,10 @@ def translate(text: str, tgt: str = "Korean") -> str:
     if not text.strip():
         return text
 
+    # If the whole text is a URL -> skip translation
+    if is_url(text):
+        return text
+
     url = "https://api.mistral.ai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}"}
     payload = {
@@ -36,7 +40,7 @@ def translate(text: str, tgt: str = "Korean") -> str:
 
 
 # --------------------------
-# Symbol / Math Detector
+# Symbol / Math / URL Detector
 # --------------------------
 def is_symbolic(text: str) -> bool:
     if not text.strip():
@@ -50,6 +54,9 @@ def is_symbolic(text: str) -> bool:
         return True
     return False
 
+def is_url(text: str) -> bool:
+    return bool(re.match(r"https?://\S+", text.strip()))
+
 
 # --------------------------
 # Translate Paragraph (pptx)
@@ -59,8 +66,8 @@ def translate_paragraph_preserve_runs(para, target_lang="Korean"):
         text = run.text
         if not text.strip():
             continue
-        if is_symbolic(text):
-            continue
+        if is_symbolic(text) or is_url(text):
+            continue  # skip symbols and URLs
         run.text = translate(text, target_lang)
 
 
@@ -106,9 +113,29 @@ def chunk_text(lines, chunk_size=20):
 def translate_text_lines(lines, target_lang="Korean"):
     results = []
     for chunk in chunk_text(lines):
-        joined = "\n".join(chunk)
-        translated = translate(joined, target_lang)
-        results.extend(translated.split("\n"))
+        translated_chunk = []
+        to_translate = []
+        idx_map = []
+
+        # Separate URLs from normal text
+        for i, line in enumerate(chunk):
+            if is_url(line):
+                translated_chunk.append(line)  # keep as-is
+            else:
+                to_translate.append(line)
+                idx_map.append(i)
+
+        # Translate only the non-URLs
+        if to_translate:
+            joined = "\n".join(to_translate)
+            translated = translate(joined, target_lang).split("\n")
+
+            for pos, t in zip(idx_map, translated):
+                while len(translated_chunk) <= pos:
+                    translated_chunk.append("")
+                translated_chunk[pos] = t
+
+        results.extend(translated_chunk)
     return results
 
 
@@ -166,10 +193,10 @@ def run_translation(mode, source, output=None, target_lang="Korean", max_slides=
 # Example Runs
 # --------------------------
 # PPTX example
-# run_translation("pptx", "input.pptx", "output_ko.pptx", target_lang="Korean", max_slides=5)
+run_translation("pptx", r"/content/ML.pptx", "output_ko.pptx", target_lang="Korean", max_slides=12)
 
 # Text example
-run_translation("text", text, target_lang="Tamil")
+# run_translation("text", "Hai", target_lang="Tamil")
 
 # File example
 # run_translation("file", "input.txt", "output_ta.txt", target_lang="Tamil")
