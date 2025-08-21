@@ -1,63 +1,175 @@
-Q1. What challenge does the paper highlight regarding data collection for research?
-A1. Where to find researchable data, what tools to scrape it, and how to analyze it.
-📄 Page: 1
+from pptx import Presentation
+import requests
+import time
+import re
+import os
 
-Q2. Which social media platform is emphasized as a key research data source?
-A2. Twitter.
-📄 Page: 2
+# --------------------------
+# Translation API
+# --------------------------
+def translate(text: str, tgt: str = "Korean") -> str:
+    if not text.strip():
+        return text
 
-Q3. What topic modelling technique is identified as the benchmark in the study?
-A3. Latent Dirichlet Allocation (LDA).
-📄 Page: 5
+    url = "https://api.mistral.ai/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}"}
+    payload = {
+        "model": "mistral-small-latest",
+        "messages": [
+            {
+                "role": "system",
+                "content": f"You are a professional translator. Translate the following strictly into {tgt}. "
+                           f"Only return translated text. Do not add explanations, notes, or formatting."
+            },
+            {"role": "user", "content": text}
+        ]
+    }
 
-Q4. What is the role of the parameters alpha and beta in LDA?
-A4. Alpha controls topic distribution per document; beta controls word distribution per topic.
-📄 Page: 7
+    try:
+        time.sleep(1)  # avoid hitting rate limits
+        resp = requests.post(url, headers=headers, json=payload, timeout=30)
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        print(f"Translation error for: '{text[:50]}...' -> {e}")
+        return text  # fallback
 
-Q5. Which embedding methods were compared in the experiments?
-A5. Bag of Words (BOW) and TF-IDF.
-📄 Page: 8
 
-🔹 5 Table-Based Questions
+# --------------------------
+# Symbol / Math Detector
+# --------------------------
+def is_symbolic(text: str) -> bool:
+    if not text.strip():
+        return True
+    non_alpha_ratio = sum(1 for c in text if not c.isalpha()) / len(text)
+    if non_alpha_ratio > 0.7:
+        return True
+    if len(text) <= 3:
+        return True
+    if re.match(r"^[\W_0-9=+\-*/|^<>{}\[\]]+$", text):
+        return True
+    return False
 
-Q6. In the results table, which model consistently outperformed others?
-A6. The LDA model.
-📄 Page: 12
 
-Q7. What framework showed better topic modelling results according to the table?
-A7. Mallet performed better than Gensim.
-📄 Page: 12
+# --------------------------
+# Translate Paragraph (pptx)
+# --------------------------
+def translate_paragraph_preserve_runs(para, target_lang="Korean"):
+    for run in para.runs:
+        text = run.text
+        if not text.strip():
+            continue
+        if is_symbolic(text):
+            continue
+        run.text = translate(text, target_lang)
 
-Q8. Which dataset type gave better classification performance in the comparison table?
-A8. Structured datasets (NIPS papers).
-📄 Page: 13
 
-Q9. What was the outcome of the t-test comparison between structured and unstructured datasets?
-A9. The difference was not statistically significant.
-📄 Page: 13
+# --------------------------
+# PPTX Translation
+# --------------------------
+def translate_pptx(input_pptx, output_pptx, target_lang="Korean", max_slides=None):
+    prs = Presentation(input_pptx)
+    for slide_idx, slide in enumerate(prs.slides, start=1):
+        if max_slides and slide_idx > max_slides:
+            break
+        print(f"Processing Slide {slide_idx}/{len(prs.slides)}")
 
-Q10. Which models were compared in the evaluation tables?
-A10. LDA, LSI, and HDP.
-📄 Page: 12–13
+        try:
+            for shape in slide.shapes:
+                if shape.has_text_frame:
+                    for para in shape.text_frame.paragraphs:
+                        translate_paragraph_preserve_runs(para, target_lang)
 
-🔹 5 Image-Based Questions
+                if shape.has_table:
+                    for row in shape.table.rows:
+                        for cell in row.cells:
+                            if cell.text_frame:
+                                for para in cell.text_frame.paragraphs:
+                                    translate_paragraph_preserve_runs(para, target_lang)
+        except Exception as e:
+            print(f"Error while processing Slide {slide_idx}: {e}. Skipping this slide.")
+            continue
 
-Q11. What does Figure 1 illustrate?
-A11. The workflow of the research.
-📄 Page: 4
+    prs.save(output_pptx)
+    print(f"Saved translated PPTX as {output_pptx}")
 
-Q12. In Figure 2, what is depicted using plate notation?
-A12. The Latent Dirichlet Allocation (LDA) model.
-📄 Page: 6
 
-Q13. What does Figure 3 show about HDP?
-A13. A graphical model of HDP with three groups.
-📄 Page: 8
+# --------------------------
+# Text Translation (string or file)
+# --------------------------
+def chunk_text(lines, chunk_size=20):
+    """Split lines into groups to avoid large requests"""
+    for i in range(0, len(lines), chunk_size):
+        yield lines[i:i + chunk_size]
 
-Q14. In the experimental framework diagram, what two datasets are highlighted?
-A14. Twitter microblog tweets and NIPS conference papers.
-📄 Page: 9
 
-Q15. What do the result plots in the later figures demonstrate?
-A15. That LDA achieved higher topic modelling performance than LSI and HDP.
-📄 Page: 14–15
+def translate_text_lines(lines, target_lang="Korean"):
+    results = []
+    for chunk in chunk_text(lines):
+        joined = "\n".join(chunk)
+        translated = translate(joined, target_lang)
+        results.extend(translated.split("\n"))
+    return results
+
+
+def translate_text_input(text, target_lang="Korean"):
+    lines = text.strip().split("\n")
+    return "\n".join(translate_text_lines(lines, target_lang))
+
+
+def translate_text_file(input_file, output_file, target_lang="Korean"):
+    with open(input_file, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    translated_lines = translate_text_lines([l.strip() for l in lines if l.strip()], target_lang)
+
+    with open(output_file, "w", encoding="utf-8") as f:
+        f.write("\n".join(translated_lines))
+
+    print(f"Saved translated text file as {output_file}")
+
+
+# --------------------------
+# Master Pipeline
+# --------------------------
+def run_translation(mode, source, output=None, target_lang="Korean", max_slides=None):
+    """
+    mode = "pptx" | "text" | "file"
+    source = input file (pptx or txt) OR raw text
+    output = output file path (pptx or txt)
+    """
+
+    if mode == "pptx":
+        if not output:
+            raise ValueError("Output pptx path required.")
+        translate_pptx(source, output, target_lang, max_slides)
+
+    elif mode == "file":
+        if not output:
+            raise ValueError("Output text file path required.")
+        translate_text_file(source, output, target_lang)
+
+    elif mode == "text":
+        result = translate_text_input(source, target_lang)
+        if output:
+            with open(output, "w", encoding="utf-8") as f:
+                f.write(result)
+            print(f"Saved translated text as {output}")
+        else:
+            print("Translated Text:\n", result)
+
+    else:
+        raise ValueError("Invalid mode. Choose from: pptx | file | text.")
+
+
+# --------------------------
+# Example Runs
+# --------------------------
+# PPTX example
+# run_translation("pptx", "input.pptx", "output_ko.pptx", target_lang="Korean", max_slides=5)
+
+# Text example
+run_translation("text", text, target_lang="Tamil")
+
+# File example
+# run_translation("file", "input.txt", "output_ta.txt", target_lang="Tamil")
