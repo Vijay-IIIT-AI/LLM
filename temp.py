@@ -1,18 +1,46 @@
+from flask import Flask, request, jsonify
+import tempfile
+import os
+import uuid
+from minio import Minio, S3Error
+from datetime import timedelta
 from pptx import Presentation
 import requests
 import time
 import re
-import os
+import logging
 
-# --------------------------
-# Translation API
-# --------------------------
-def translate(text: str, tgt: str = "Korean") -> str:
+
+#https://dl.min.io/client/mc/release/windows-amd64/mc.exe
+# mc alias set myminio http://127.0.0.1:9000 minioadmin minioadmin
+# mc ilm add myminio/translate --expiry-days 1
+#https://dl.min.io/server/minio/release/windows-amd64/minio.exe
+#.\minio.exe server C:\minio\data
+
+# ==========================
+# Setup Logging
+# ==========================
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
+
+# ==========================
+# Translation Core
+# ==========================
+api_key = "mjLoMvjl6nnvofomLxPNDMWZsvuouvCz"
+
+def is_url(text: str) -> bool:
+    return bool(re.match(r"https?://\S+", text.strip()))
+
+def is_symbolic(text: str) -> bool:
     if not text.strip():
-        return text
+        return True
+    non_alpha_ratio = sum(1 for c in text if not c.isalpha()) / len(text)
+    return non_alpha_ratio > 0.7 or len(text) <= 3
 
-    # If the whole text is a URL -> skip translation
-    if is_url(text):
+def translate(text: str, tgt: str = "Korean") -> str:
+    if not text.strip() or is_url(text) or is_symbolic(text):
         return text
 
     url = "https://api.mistral.ai/v1/chat/completions"
@@ -20,183 +48,195 @@ def translate(text: str, tgt: str = "Korean") -> str:
     payload = {
         "model": "mistral-small-latest",
         "messages": [
-            {
-                "role": "system",
-                "content": f"You are a professional translator. Translate the following strictly into {tgt}. "
-                           f"Only return translated text. Do not add explanations, notes, or formatting."
-            },
+            {"role": "system", "content": f"Translate strictly into {tgt}. Only return translated text."},
             {"role": "user", "content": text}
         ]
     }
 
     try:
-        time.sleep(1)  # avoid hitting rate limits
+        time.sleep(0.3)
         resp = requests.post(url, headers=headers, json=payload, timeout=30)
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"].strip()
+    except requests.exceptions.Timeout:
+        logging.error("Translation request timed out.")
+        return text
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Translation API error: {e}")
+        return text
     except Exception as e:
-        print(f"Translation error for: '{text[:50]}...' -> {e}")
-        return text  # fallback
+        logging.error(f"Unexpected translation error: {e}")
+        return text
 
 
-# --------------------------
-# Symbol / Math / URL Detector
-# --------------------------
-def is_symbolic(text: str) -> bool:
-    if not text.strip():
-        return True
-    non_alpha_ratio = sum(1 for c in text if not c.isalpha()) / len(text)
-    if non_alpha_ratio > 0.7:
-        return True
-    if len(text) <= 3:
-        return True
-    if re.match(r"^[\W_0-9=+\-*/|^<>{}\[\]]+$", text):
-        return True
-    return False
-
-def is_url(text: str) -> bool:
-    return bool(re.match(r"https?://\S+", text.strip()))
-
-
-# --------------------------
-# Translate Paragraph (pptx)
-# --------------------------
-def translate_paragraph_preserve_runs(para, target_lang="Korean"):
-    for run in para.runs:
-        text = run.text
-        if not text.strip():
-            continue
-        if is_symbolic(text) or is_url(text):
-            continue  # skip symbols and URLs
-        run.text = translate(text, target_lang)
-
-
-# --------------------------
 # PPTX Translation
-# --------------------------
-def translate_pptx(input_pptx, output_pptx, target_lang="Korean", max_slides=None):
+def translate_paragraph(para, target_lang="Korean"):
+    for run in para.runs:
+        run.text = translate(run.text, target_lang)
+
+def translate_pptx(input_pptx, output_pptx, target_lang="Korean"):
     prs = Presentation(input_pptx)
-    for slide_idx, slide in enumerate(prs.slides, start=1):
-        if max_slides and slide_idx > max_slides:
-            break
-        print(f"Processing Slide {slide_idx}/{len(prs.slides)}")
-
-        try:
-            for shape in slide.shapes:
-                if shape.has_text_frame:
-                    for para in shape.text_frame.paragraphs:
-                        translate_paragraph_preserve_runs(para, target_lang)
-
-                if shape.has_table:
-                    for row in shape.table.rows:
-                        for cell in row.cells:
-                            if cell.text_frame:
-                                for para in cell.text_frame.paragraphs:
-                                    translate_paragraph_preserve_runs(para, target_lang)
-        except Exception as e:
-            print(f"Error while processing Slide {slide_idx}: {e}. Skipping this slide.")
-            continue
-
+    for slide in prs.slides:
+        for shape in slide.shapes:
+            if shape.has_text_frame:
+                for para in shape.text_frame.paragraphs:
+                    translate_paragraph(para, target_lang)
+            if shape.has_table:
+                for row in shape.table.rows:
+                    for cell in row.cells:
+                        for para in cell.text_frame.paragraphs:
+                            translate_paragraph(para, target_lang)
     prs.save(output_pptx)
-    print(f"Saved translated PPTX as {output_pptx}")
 
 
-# --------------------------
-# Text Translation (string or file)
-# --------------------------
-def chunk_text(lines, chunk_size=20):
-    """Split lines into groups to avoid large requests"""
-    for i in range(0, len(lines), chunk_size):
-        yield lines[i:i + chunk_size]
-
-
-def translate_text_lines(lines, target_lang="Korean"):
-    results = []
-    for chunk in chunk_text(lines):
-        translated_chunk = []
-        to_translate = []
-        idx_map = []
-
-        # Separate URLs from normal text
-        for i, line in enumerate(chunk):
-            if is_url(line):
-                translated_chunk.append(line)  # keep as-is
-            else:
-                to_translate.append(line)
-                idx_map.append(i)
-
-        # Translate only the non-URLs
-        if to_translate:
-            joined = "\n".join(to_translate)
-            translated = translate(joined, target_lang).split("\n")
-
-            for pos, t in zip(idx_map, translated):
-                while len(translated_chunk) <= pos:
-                    translated_chunk.append("")
-                translated_chunk[pos] = t
-
-        results.extend(translated_chunk)
-    return results
-
-
-def translate_text_input(text, target_lang="Korean"):
-    lines = text.strip().split("\n")
-    return "\n".join(translate_text_lines(lines, target_lang))
-
-
+# Text Translation
 def translate_text_file(input_file, output_file, target_lang="Korean"):
-    with open(input_file, "r", encoding="utf-8") as f:
-        lines = f.readlines()
+    try:
+        with open(input_file, "r", encoding="utf-8") as f:
+            lines = [line.strip() for line in f if line.strip()]
+    except Exception as e:
+        logging.error(f"Error reading text file: {e}")
+        raise
 
-    translated_lines = translate_text_lines([l.strip() for l in lines if l.strip()], target_lang)
+    translated = [translate(line, target_lang) for line in lines]
 
     with open(output_file, "w", encoding="utf-8") as f:
-        f.write("\n".join(translated_lines))
-
-    print(f"Saved translated text file as {output_file}")
+        f.write("\n".join(translated))
 
 
-# --------------------------
-# Master Pipeline
-# --------------------------
-def run_translation(mode, source, output=None, target_lang="Korean", max_slides=None):
+# ==========================
+# Flask + MinIO API
+# ==========================
+app = Flask(__name__)
+
+minio_client = Minio(
+    "127.0.0.1:9000",
+    access_key="minioadmin",
+    secret_key="minioadmin",
+    secure=False
+)
+BUCKET_NAME = "translate"
+
+# Ensure bucket exists
+try:
+    if not minio_client.bucket_exists(BUCKET_NAME):
+        minio_client.make_bucket(BUCKET_NAME)
+except S3Error as e:
+    logging.error(f"MinIO bucket error: {e}")
+
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    logging.exception("Unhandled exception occurred")
+    return jsonify({"error": str(e)}), 500
+
+
+@app.route("/translate", methods=["POST"])
+def translate_endpoint():
     """
-    mode = "pptx" | "text" | "file"
-    source = input file (pptx or txt) OR raw text
-    output = output file path (pptx or txt)
+    Params:
+      - mode = pptx | file
+      - target_lang (default Korean)
+      - file (uploaded file)
     """
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
 
-    if mode == "pptx":
-        if not output:
-            raise ValueError("Output pptx path required.")
-        translate_pptx(source, output, target_lang, max_slides)
+    mode = request.form.get("mode", "pptx")
+    target_lang = request.form.get("target_lang", "Korean")
+    file = request.files["file"]
 
-    elif mode == "file":
-        if not output:
-            raise ValueError("Output text file path required.")
-        translate_text_file(source, output, target_lang)
+    # Assign unique name
+    unique_id = str(uuid.uuid4())[:8]
+    original_filename = file.filename or "uploaded_file"
+    object_name = f"input/{unique_id}_{original_filename}"
 
-    elif mode == "text":
-        result = translate_text_input(source, target_lang)
-        if output:
-            with open(output, "w", encoding="utf-8") as f:
-                f.write(result)
-            print(f"Saved translated text as {output}")
+    temp_files = []
+    try:
+        # Save uploaded file locally
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            file.save(tmp.name)
+            local_input = tmp.name
+            temp_files.append(local_input)
+
+        # Upload to MinIO
+        minio_client.fput_object(BUCKET_NAME, object_name, local_input)
+        logging.info(f"Uploaded original file to MinIO: {object_name}")
+
+        # Prepare translated file
+        ext = ".pptx" if mode == "pptx" else ".txt"
+        local_output = local_input + "_translated" + ext
+        translated_object = f"output/{unique_id}_{original_filename.rsplit('.',1)[0]}_translated{ext}"
+        temp_files.append(local_output)
+
+        # Run translation
+        if mode == "pptx":
+            translate_pptx(local_input, local_output, target_lang)
+        elif mode == "file":
+            translate_text_file(local_input, local_output, target_lang)
         else:
-            print("Translated Text:\n", result)
+            return jsonify({"error": "Invalid mode, choose pptx or file"}), 400
 
-    else:
-        raise ValueError("Invalid mode. Choose from: pptx | file | text.")
+        # Upload translated file
+        minio_client.fput_object(BUCKET_NAME, translated_object, local_output)
+        logging.info(f"Uploaded translated file to MinIO: {translated_object}")
+
+        # Generate presigned URL
+        url = minio_client.presigned_get_object(
+            BUCKET_NAME, translated_object, expires=timedelta(hours=1)
+        )
+
+        return jsonify({
+            "status": "success",
+            "mode": mode,
+            "target_lang": target_lang,
+            "translated_file": translated_object,
+            "download_url": url
+        })
+
+    except S3Error as e:
+        logging.error(f"MinIO error: {e}")
+        return jsonify({"error": "File storage failed"}), 500
+    except Exception as e:
+        logging.error(f"Translation pipeline error: {e}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        # Cleanup temp files
+        for f in temp_files:
+            try:
+                if os.path.exists(f):
+                    os.remove(f)
+            except Exception as cleanup_err:
+                logging.warning(f"Temp file cleanup failed: {cleanup_err}")
 
 
-# --------------------------
-# Example Runs
-# --------------------------
-# PPTX example
-run_translation("pptx", r"/content/P23_Research Data Analysis.pptx", "output_ko.pptx", target_lang="Korean", max_slides=12)
+@app.route("/stats", methods=["GET"])
+def stats():
+    try:
+        total_files = 0
+        total_size = 0
+        objects_info = []
 
-# Text example
-# run_translation("text", "Hai", target_lang="Tamil")
+        # Iterate all objects in the bucket
+        for obj in minio_client.list_objects(BUCKET_NAME, recursive=True):
+            total_files += 1
+            total_size += obj.size
+            objects_info.append({
+                "name": obj.object_name,
+                "size_bytes": obj.size,
+                "last_modified": obj.last_modified.isoformat() if obj.last_modified else None
+            })
 
-# File example
-# run_translation("file", "input.txt", "output_ta.txt", target_lang="Tamil")
+        return jsonify({
+            "bucket": BUCKET_NAME,
+            "total_files": total_files,
+            "total_size_mb": round(total_size / (1024 * 1024), 2),
+            "objects": objects_info
+        })
+
+    except S3Error as e:
+        return jsonify({"error": str(e)}), 500
+
+
+if __name__ == "__main__":
+    app.run(port=5000, debug=False)  # disable debug in production
