@@ -1,14 +1,29 @@
-pymupdf<1.25.3
-pdfminer-six==20250416
-pikepdf
-numpy
-opencv-python-headless
-onnx
-onnxruntime
-requests
-tenacity
-babeldoc>=0.1.22,<0.3.0
-fontTools
-huggingface_hub
-peewee>=3.17.8
-tqdm
+version: "3.9"
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports: ["5672:5672", "15672:15672"]
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - C:\Data\QueueSystem\rabbitmq:/var/lib/rabbitmq
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports: ["6379:6379"]
+    volumes:
+      - C:\Data\QueueSystem\redis:/data
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - C:\Data\QueueSystem\minio:/data
