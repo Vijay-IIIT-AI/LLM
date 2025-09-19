@@ -30,3 +30,14 @@ def proxy_minio_file(request, object_path):
         
     except Exception as e:
         raise Http404(f"File not found: {str(e)}")
+
+
+def generate_download_url(object_path: str) -> str:
+    """Return a URL for downloading the object/file.
+    MinIO => Django proxy URL; Local => /local/<path>
+    """
+    if settings.USE_MINIO:
+        # Return Django proxy URL instead of presigned MinIO URL
+        return f"/files/download/{object_path}"
+    # Local: return application route path
+    return f"/local/{object_path}"
