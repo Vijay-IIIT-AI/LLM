@@ -35,6 +35,19 @@ class RerankRequest(BaseModel):
 
 @app.post("/rerank")
 def rerank(request: RerankRequest):
-    pairs = [(request.query, c) for c in request.candidates]
-    scores = reranker.predict(pairs)
-    return {"results": list(zip(request.candidates, scores.tolist()))}
+    model = reranker_models[request.model_name]
+
+    # Build pairs (query, doc)
+    pairs = [(request.query, doc) for doc in request.docs]
+
+    # Predict relevance scores
+    scores = model.predict(pairs)
+
+    # Zip docs with scores and sort
+    results = sorted(
+        zip(request.docs, scores.tolist()),
+        key=lambda x: x[1],
+        reverse=True
+    )
+
+    return {"results": results}
