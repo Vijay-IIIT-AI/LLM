@@ -1,3 +1,4 @@
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 from client import MultiModelClient
 
 # Initialize client
