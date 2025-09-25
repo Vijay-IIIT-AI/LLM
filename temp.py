@@ -27,3 +27,18 @@ query = "Which candidate is best?"
 candidates = ["Candidate 1", "Candidate 2", "Candidate 3"]
 scores = client.rerank(query, candidates, "reranker_model_1")
 print("Reranker scores:", scores)
+
+
+@app.get("/health")
+def health():
+    try:
+        # Test one embedding model
+        _ = embedding_models["embedding_model_1"].encode(["healthcheck"], convert_to_tensor=True)
+
+        # Test one reranker model
+        _ = reranker_models["reranker_1"].predict([["healthcheck", "dummy doc"]])
+
+        return {"status": "ok"}
+    except Exception as e:
+        return {"status": "error", "details": str(e)}
+
