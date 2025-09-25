@@ -1,80 +1,76 @@
-docker build -t multi-model-gpu-api .
+import requests
+from typing import List, Union, Dict
 
-docker run --gpus all -p 8000:8000 multi-model-gpu-api
+class MultiModelClient:
+    """
+    Python client for GPU Multi-Model FastAPI service.
+    """
 
+    def __init__(self, base_url: str = "http://localhost:8000", timeout: int = 10):
+        self.base_url = base_url.rstrip("/")
+        self.timeout = timeout
 
-FROM pytorch/pytorch:2.7.1-cuda11.8-cudnn9-runtime
+    # -------------------------
+    # Embedding API
+    # -------------------------
+    def embed(self, texts: Union[str, List[str]], model_name: str) -> List[List[float]]:
+        """
+        Get embeddings for a single text or a list of texts using specified embedding model.
+        Returns a list of embeddings (each embedding is a list of floats).
+        """
+        if isinstance(texts, str):
+            texts = [texts]
+        payload = {
+            "model_name": model_name,
+            "texts": texts
+        }
+        try:
+            response = requests.post(f"{self.base_url}/embed", json=payload, timeout=self.timeout)
+            response.raise_for_status()
+            data = response.json()
+            if "embeddings" not in data:
+                raise ValueError("Invalid response: missing embeddings")
+            return data["embeddings"]
+        except Exception as e:
+            raise RuntimeError(f"Embedding API call failed: {e}")
 
-entrypoint.sh
+    # -------------------------
+    # Reranker API
+    # -------------------------
+    def rerank(self, query: str, candidates: List[str], model_name: str) -> List[float]:
+        """
+        Rerank candidates for a given query using specified reranker model.
+        Returns a list of scores (one score per candidate).
+        """
+        if not isinstance(candidates, list) or len(candidates) == 0:
+            raise ValueError("Candidates must be a non-empty list of strings")
 
-#!/bin/bash
-# -------------------------
-# Entrypoint for Docker container
-# -------------------------
+        payload = {
+            "model_name": model_name,
+            "query": query,
+            "candidates": candidates
+        }
+        try:
+            response = requests.post(f"{self.base_url}/rerank", json=payload, timeout=self.timeout)
+            response.raise_for_status()
+            data = response.json()
+            if "scores" not in data:
+                raise ValueError("Invalid response: missing scores")
+            return data["scores"]
+        except Exception as e:
+            raise RuntimeError(f"Reranker API call failed: {e}")
 
-# Start FastAPI in background
-uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1 &
-APP_PID=$!
-
-# Give the server some time to start
-echo "Waiting for FastAPI to start..."
-sleep 5
-
-# Run the API test script
-python test_api_multiple_models.py
-TEST_EXIT_CODE=$?
-
-if [ $TEST_EXIT_CODE -ne 0 ]; then
-    echo "❌ API tests failed. Stopping FastAPI..."
-    kill $APP_PID
-    exit 1
-fi
-
-echo "✅ API tests passed. FastAPI continues running..."
-wait $APP_PID
-
-
-FROM pytorch/pytorch:2.7.1-cuda11.8-cudnn9-runtime
-
-WORKDIR /app
-
-# Copy requirements and install
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy app code and scripts
-COPY . .
-
-# Make entrypoint executable
-RUN chmod +x entrypoint.sh
-
-EXPOSE 8000
-
-ENTRYPOINT ["./entrypoint.sh"]
-
-
-
-from fastapi import FastAPI
-import torch
-
-app = FastAPI(title="GPU Multi-Model API")
-
-# Assume embedding_models and reranker_models are already loaded
-
-@app.get("/health")
-def health():
-    # Check FastAPI is alive
-    try:
-        # Optional: quick test with a single dummy inference per model
-        for name, model in embedding_models.items():
-            _ = model.encode(["healthcheck"], convert_to_tensor=True)
-
-        for name, model in reranker_models.items():
-            dummy_input = torch.randn(1, model(torch.randn(1)).shape[0]).cuda()
-            with torch.no_grad():
-                _ = model(dummy_input)
-
-        return {"status": "ok", "models": "all loaded"}
-    except Exception as e:
-        return {"status": "error", "detail": str(e)}
-
+    # -------------------------
+    # Health Check
+    # -------------------------
+    def health(self) -> Dict:
+        """
+        Check API health status.
+        Returns a dictionary with status info.
+        """
+        try:
+            response = requests.get(f"{self.base_url}/health", timeout=self.timeout)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            raise RuntimeError(f"Health check failed: {e}")
