@@ -29,16 +29,12 @@ scores = client.rerank(query, candidates, "reranker_model_1")
 print("Reranker scores:", scores)
 
 
-@app.get("/health")
-def health():
-    try:
-        # Test one embedding model
-        _ = embedding_models["embedding_model_1"].encode(["healthcheck"], convert_to_tensor=True)
+class RerankRequest(BaseModel):
+    query: str
+    candidates: list[str]
 
-        # Test one reranker model
-        _ = reranker_models["reranker_1"].predict([["healthcheck", "dummy doc"]])
-
-        return {"status": "ok"}
-    except Exception as e:
-        return {"status": "error", "details": str(e)}
-
+@app.post("/rerank")
+def rerank(request: RerankRequest):
+    pairs = [(request.query, c) for c in request.candidates]
+    scores = reranker.predict(pairs)
+    return {"results": list(zip(request.candidates, scores.tolist()))}
