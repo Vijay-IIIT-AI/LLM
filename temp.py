@@ -1,128 +1,86 @@
-http://localhost:8000/download_by_url?url=http://127.0.0.1:9000/data/report_comprehensive_2406211642.pdf
+# --- Stage 1: Build the Next.js Frontend ---
+# Use an official Node.js image as a temporary build environment.
+FROM node:20-slim as nextjs-builder
+
+# Set the working directory for the Next.js app
+WORKDIR /app/servers/nextjs
+
+# Copy only the package files to leverage Docker caching
+COPY servers/nextjs/package.json servers/nextjs/package-lock.json ./
+
+# Install npm dependencies
+RUN npm install
+
+# Copy the rest of the Next.js source code
+COPY servers/nextjs/ ./
+
+# Build the production-ready Next.js app
+RUN npm run build
 
 
-# views.py
-import io
-from urllib.parse import urlparse, quote
-from django.http import StreamingHttpResponse, HttpResponse, JsonResponse
-from minio import Minio
-from minio.error import S3Error
+# --- Stage 2: Build the Final Production Image ---
+# Start from your original Python base image
+FROM python:3.11-slim-bookworm
 
-# MinIO configuration
-MINIO_ENDPOINT = "127.0.0.1:9000"
-MINIO_ACCESS_KEY = "minioadmin"
-MINIO_SECRET_KEY = "minioadmin"
-MINIO_SECURE = False
-CHUNK_SIZE = 1024 * 1024  # 1 MB
+# Combine installation of all system dependencies in a single RUN command
+# This reduces the number of layers in the final image.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    nginx \
+    curl \
+    libreoffice \
+    fontconfig \
+    chromium \
+    # Clean up apt cache to reduce image size
+    && rm -rf /var/lib/apt/lists/*
 
-minio_client = Minio(
-    MINIO_ENDPOINT,
-    access_key=MINIO_ACCESS_KEY,
-    secret_key=MINIO_SECRET_KEY,
-    secure=MINIO_SECURE
-)
+# Install Node.js 20 runtime (needed for start.js)
+# We combine this with the previous RUN command in a real-world scenario,
+# but separate it here for clarity.
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    rm -rf /var/lib/apt/lists/*
 
-import re
-_range_re = re.compile(r"bytes=(\d*)-(\d*)")
+# Create a working directory
+WORKDIR /app
 
-def parse_range_header(range_header, file_size):
-    if not range_header:
-        return None
-    m = _range_re.match(range_header)
-    if not m:
-        return None
-    start_str, end_str = m.groups()
-    if start_str == "" and end_str == "":
-        return None
-    if start_str == "":
-        suffix_len = int(end_str)
-        start = max(0, file_size - suffix_len)
-        end = file_size - 1
-    elif end_str == "":
-        start = int(start_str)
-        end = file_size - 1
-    else:
-        start = int(start_str)
-        end = int(end_str)
-    if start > end or start >= file_size:
-        return None
-    end = min(end, file_size - 1)
-    return start, end
+# Set environment variables
+ENV APP_DATA_DIRECTORY=/app_data
+ENV TEMP_DIRECTORY=/tmp/presenton
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
-# Optional auth
-def check_auth(bucket, obj_path):
-    return True
+# Install ollama
+# Note: This adds a significant layer to the image.
+RUN curl -fsSL https://ollama.com/install.sh | sh
 
-# ------------------------
-# Download view
-# ------------------------
-def download_by_url(request):
-    minio_url = request.GET.get("url")
-    if not minio_url:
-        return JsonResponse({"error": "url query parameter required"}, status=400)
+# Install Python dependencies
+# Copying requirements.txt first and installing from it improves caching
+# Assuming your Python dependencies are or can be listed in a requirements.txt file
+# COPY requirements.txt .
+# RUN pip install --no-cache-dir -r requirements.txt
+# Using your original pip install commands as a fallback:
+RUN pip install --no-cache-dir aiohttp aiomysql aiosqlite asyncpg fastapi[standard] \
+    pathvalidate pdfplumber chromadb sqlmodel \
+    anthropic google-genai openai fastmcp dirtyjson
+RUN pip install --no-cache-dir docling --extra-index-url https://download.pytorch.org/whl/cpu
 
-    try:
-        parsed = urlparse(minio_url)
-        path_parts = parsed.path.lstrip("/").split("/", 1)
-        if len(path_parts) != 2:
-            return JsonResponse({"error": "invalid MinIO URL"}, status=400)
-        bucket, obj_path = path_parts
-    except Exception:
-        return JsonResponse({"error": "invalid MinIO URL"}, status=400)
+# Copy the FastAPI server code
+COPY servers/fastapi/ ./servers/fastapi/
 
-    if not check_auth(bucket, obj_path):
-        return HttpResponse(status=403)
+# --- This is the key step of the multi-stage build ---
+# Copy ONLY the built Next.js app from the 'nextjs-builder' stage
+COPY --from=nextjs-builder /app/servers/nextjs/.next ./servers/nextjs/.next
+# Also copy public and static folders if they exist and are needed
+COPY --from=nextjs-builder /app/servers/nextjs/public ./servers/nextjs/public
+# Copy the standalone server files if using Next.js output standalone feature
+COPY --from=nextjs-builder /app/servers/nextjs/standalone ./servers/nextjs/standalone
 
-    try:
-        stat = minio_client.stat_object(bucket, obj_path)
-        file_size = stat.size
-        content_type = stat.content_type or "application/octet-stream"
-    except S3Error:
-        return JsonResponse({"error": "object not found"}, status=404)
 
-    # Range parsing
-    range_header = request.headers.get("Range")
-    range_parsed = parse_range_header(range_header, file_size)
-    if range_parsed:
-        start, end = range_parsed
-        length = end - start + 1
-        status_code = 206
-    else:
-        start = 0
-        end = file_size - 1
-        length = file_size
-        status_code = 200
+# Copy remaining application and configuration files
+COPY start.js LICENSE NOTICE ./
+COPY nginx.conf /etc/nginx/nginx.conf
 
-    # Generator for streaming
-    def stream_generator():
-        obj = None
-        try:
-            obj = minio_client.get_object(bucket, obj_path, offset=start, length=length)
-            for chunk in obj.stream(CHUNK_SIZE):
-                if not chunk:
-                    break
-                yield chunk
-        finally:
-            if obj:
-                try:
-                    obj.close()
-                    obj.release_conn()
-                except Exception:
-                    pass
+# Expose the port Nginx will listen on
+EXPOSE 80
 
-    filename = obj_path.split("/")[-1]
-    filename_encoded = quote(filename)
-    content_disposition = f"attachment; filename*=UTF-8''{filename_encoded}"
-
-    response = StreamingHttpResponse(
-        stream_generator(),
-        content_type=content_type,
-        status=status_code
-    )
-    response["Content-Length"] = str(length)
-    response["Content-Disposition"] = content_disposition
-    response["Accept-Ranges"] = "bytes"
-    if range_parsed:
-        response["Content-Range"] = f"bytes {start}-{end}/{file_size}"
-
-    return response
+# Start the application using your process manager script
+CMD ["node", "/app/start.js"]
