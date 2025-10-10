@@ -194,3 +194,12 @@ pip install fastapi uvicorn diffusers transformers accelerate safetensors pillow
 -----
 
 uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+
+
+{
+  "prompt": "A cyberpunk city at night, neon reflections, cinematic",
+  "width": 512,
+  "height": 512,
+  "num_inference_steps": 20,
+  "guidance_scale": 7.5
+}
