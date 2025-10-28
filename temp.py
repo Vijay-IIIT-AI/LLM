@@ -1,1 +1,1 @@
-How many passengers had more than 2 parents/children (Parch > 2)
+Did wealth (high fare) consistently improve survival chances within each passenger class, or was the survival advantage of higher fares only true in 1st class?
